@@ -1,40 +1,27 @@
 # 1Password MCP Server
 
->
-> **⚠️ IMPORTANT SECURITY & PRIVACY WARNING**
->
-> - **NOT OFFICIAL**: This is **NOT** an official 1Password product. It is a community-developed tool.
-> - **AI TRAINING RISK**: Depending on your LLM provider (e.g., Google, OpenAI, Anthropic), the data sent to the model—including passwords retrieved or created—**may be used for model training** unless you have explicitly opted out or are using an Enterprise/API tier with privacy guarantees.
-> - **NO END-TO-END ENCRYPTION (Local)**: Passwords handled by this server are in **plaintext** within the MCP context and during transmission to the LLM. They are only encrypted once they are safely stored inside your 1Password vault.
-> - **INTENDED USE**: This tool is designed for **"Automated Created Passwords"** (e.g., development database credentials, disposable service accounts, bot tokens) so they don't get lost.
-> - **DO NOT USE FOR SENSITIVE DATA**: Do **NOT** use this tool to manage "Banking Passwords," primary personal accounts, or any high-stakes credentials. Only use it with dedicated vaults intended for automated workflows.
+This project is a community-built (not official) Model Context Protocol (MCP) server that allows MCP-compatible clients (e.g., Claude Desktop, IDE extensions, OpenAI Codex, Gemini, Claude) to interact with 1Password vaults using a 1Password Service Account. It exposes tools for listing vaults, searching items, generating passwords, and creating/reading/updating password items.
 
-A Model Context Protocol (MCP) server that enables LLMs like **Google Gemini**, **OpenAI Codex**, and **Anthropic Claude** to securely interact with your 1Password vaults. Using a 1Password Service Account, this server provides a standardized interface for AI models to list vaults, search for items, and manage passwords.
+## ⚠️ Security & Privacy Warning
 
-## Features
+> - **Not an official 1Password product.**
+> - **LLM privacy risk**: Any secrets retrieved/created may be sent to your LLM provider and could be retained or used for training depending on your provider/account settings.
+> - **No E2E encryption in MCP context**: secrets are plaintext inside the MCP workflow and in transit to the model; they’re encrypted only once stored in 1Password.
+> - **Intended use**: best for automated / disposable credentials (dev DB creds, bot/service accounts, tokens).
+> - **Avoid high-stakes secrets**: do not use for banking, primary personal accounts, or other sensitive credentials—use dedicated automation vaults.
 
-- **Secure Access**: Utilizes 1Password Service Accounts for controlled, programmatic access.
-- **Cross-Model Compatibility**: Works with any MCP-compatible client or platform (e.g., Claude Desktop, IDE extensions).
-- **Comprehensive Toolset**: Empower your AI assistant to create, read, and update vault items with precision.
+## Tools / Capabilities
 
-## Capabilities
+- `vault_list` – list accessible vaults
+- `item_lookup` – find items by title in a vault
+- `password_generate` / `password_generate_memorable` – generate strong or memorable passwords
+- `password_create` – create a new password item
+- `password_read` – retrieve a password via secret reference (`op://vault/item/field`)
+- `password_update` – rotate/update an existing password item
 
-The following tools are exposed to the AI model:
+## Configuration
 
-- `vault_list`: List all vaults accessible to the service account.
-- `item_lookup`: Search for items within a specific vault by title.
-- `password_generate`: Generate a strong, secure password with customizable criteria.
-- `password_generate_memorable`: Create easy-to-remember passwords using words (nouns, colors, etc.), numbers, and symbols.
-- `password_create`: Create a new password item with specific details (username, URL, tags, etc.).
-- `password_read`: Retrieve a password using a 1Password secret reference (`op://vault/item/field`).
-- `password_update`: Rotate or update an existing item's password.
-
-## Configuration for AI Clients
-
-To use this server with your preferred AI environment, add it to your MCP configuration file.
-
-### Recommended: Claude Desktop / IDEs (JSON with Env Vars)
-This is the most secure method as it prevents your token from appearing in system process lists.
+### Claude Desktop / IDEs (JSON)
 
 ```json
 {
@@ -50,33 +37,35 @@ This is the most secure method as it prevents your token from appearing in syste
 }
 ```
 
-### Codex
+### Codex (TOML)
 
-To add this server to Codex, run the following command:
+**Option A (stores the token in `config.toml`):**
 
-```bash
-codex mcp add 1password --env OP_SERVICE_ACCOUNT_TOKEN=YOUR_SERVICE_ACCOUNT_TOKEN -- npx -y @takescake/1password-mcp
+```toml
+[mcp_servers."1password"]
+command = "npx"
+args = ["-y", "@takescake/1password-mcp"]
+
+[mcp_servers."1password".env]
+OP_SERVICE_ACCOUNT_TOKEN = "YOUR_SERVICE_ACCOUNT_TOKEN"
 ```
 
-## Usage in Prompting
+**Option B (recommended: does NOT store the token in Codex config):**
 
-Once configured, you can ask your AI model tasks like:
-- "Find my login for 'GitHub' in the Engineering vault."
-- "Create a new password for 'Staging DB' with the username 'admin'."
-- "Update the password for my 'Cloud Console' entry."
+```toml
+[mcp_servers."1password"]
+command = "npx"
+args = ["-y", "@takescake/1password-mcp"]
+env_vars = ["OP_SERVICE_ACCOUNT_TOKEN"]
+```
 
-## Security Best Practices
+Then set the environment variable outside Codex (shell/session, secret manager, CI, etc.).
 
-- **Use Environment Variables**: Always use the `env` configuration block. This prevents your service account token from being visible in system process lists (e.g., Task Manager or `ps aux`).
-- **Avoid Plaintext Storage**: Never store generated passwords in plaintext files (e.g., `.codex` or conversation logs).
-- **Version Control Risks**: Ensure your MCP configuration files (which contain your tokens) are added to your `.gitignore`. Accidental commits of these files can expose your credentials in repository history.
-- **Use Secret References**: Instead of storing actual passwords, use 1Password **Secret References** (e.g., `op://Vault/Item/password`). The AI can use the `password_read` tool to retrieve values dynamically.
-- **Service Account Safety**: Treat your Service Account Token as a master key. Rotate it immediately if you suspect it has been exposed.
+> **Note**: `codex mcp add ... --env OP_SERVICE_ACCOUNT_TOKEN=...` also writes the token into Codex config. Use `env_vars` if you want the config to reference only the variable name.
 
-## Requirements
+## Best Practices
 
-- **1Password Service Account**: A valid token with appropriate vault permissions.
-- **Node.js**: Version 18 or higher.
-
-## Security Note
-Always treat your Service Account Token as a sensitive secret. Ensure your MCP configuration files are stored securely and never committed to public repositories.
+- **Treat the Service Account Token like a master key** (rotate immediately if exposed).
+- **Keep MCP config files out of version control** (`.gitignore`).
+- **Prefer secret references** (`op://...`) over copying raw passwords into prompts or files.
+- **Use dedicated vaults and least-privilege service accounts** for automation workflows.
