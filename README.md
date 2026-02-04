@@ -33,25 +33,30 @@ The following tools are exposed to the AI model:
 
 To use this server with your preferred AI environment, add it to your MCP configuration file.
 
-### Claude Desktop / IDEs (JSON)
+### Recommended: Claude Desktop / IDEs (JSON with Env Vars)
+This is the most secure method as it prevents your token from appearing in system process lists.
+
 ```json
 {
   "mcpServers": {
     "1password": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@takescake/1password-mcp",
-        "--service-account-token",
-        "YOUR_SERVICE_ACCOUNT_TOKEN"
-      ]
+      "args": ["-y", "@takescake/1password-mcp"],
+      "env": {
+        "OP_SERVICE_ACCOUNT_TOKEN": "YOUR_SERVICE_ACCOUNT_TOKEN"
+      }
     }
   }
 }
 ```
 
-### Environment Variables
-Alternatively, you can provide the token via the `OP_SERVICE_ACCOUNT_TOKEN` environment variable.
+### Codex
+
+To add this server to Codex, run the following command:
+
+```bash
+codex mcp add 1password --env OP_SERVICE_ACCOUNT_TOKEN=YOUR_SERVICE_ACCOUNT_TOKEN -- npx -y @takescake/1password-mcp
+```
 
 ## Usage in Prompting
 
@@ -62,9 +67,10 @@ Once configured, you can ask your AI model tasks like:
 
 ## Security Best Practices
 
-- **Avoid Plaintext Storage**: Never store generated passwords or tokens in plaintext files (e.g., `.codex`, `.env`, or conversation logs). These files are not encrypted and can be accessed by other users or processes.
-- **Version Control Risks**: Ensure that any files containing configuration or session history are added to your `.gitignore`. Accidental commits of these files can expose your credentials in repository history.
-- **Use Secret References**: Instead of storing actual passwords, use 1Password **Secret References** (e.g., `op://Vault/Item/password`). The AI can use the `password_read` tool to retrieve values dynamically when needed.
+- **Use Environment Variables**: Always use the `env` configuration block. This prevents your service account token from being visible in system process lists (e.g., Task Manager or `ps aux`).
+- **Avoid Plaintext Storage**: Never store generated passwords in plaintext files (e.g., `.codex` or conversation logs).
+- **Version Control Risks**: Ensure your MCP configuration files (which contain your tokens) are added to your `.gitignore`. Accidental commits of these files can expose your credentials in repository history.
+- **Use Secret References**: Instead of storing actual passwords, use 1Password **Secret References** (e.g., `op://Vault/Item/password`). The AI can use the `password_read` tool to retrieve values dynamically.
 - **Service Account Safety**: Treat your Service Account Token as a master key. Rotate it immediately if you suspect it has been exposed.
 
 ## Requirements
