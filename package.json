@@ -1,0 +1,28 @@
+{
+  "name": "@takescake/1password-mcp",
+  "version": "1.0.0",
+  "private": false,
+  "type": "module",
+  "description": "MCP server for 1Password service accounts",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js"
+  },
+  "bin": {
+    "1password-mcp": "bin/1password-mcp.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "package.json"
+  ],
+  "dependencies": {
+    "@1password/sdk": "^0.3.1",
+    "@modelcontextprotocol/sdk": "^1.7.0",
+    "zod": "^3.23.8"
+  }
+}
