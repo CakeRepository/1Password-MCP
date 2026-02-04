@@ -1,9 +1,14 @@
 {
   "name": "@takescake/1password-mcp",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": false,
   "type": "module",
   "description": "MCP server for 1Password service accounts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/takescake/1password-mcp.git"
+  },
+  "mcpName": "io.github.takescake/1password",
   "engines": {
     "node": ">=18"
   },
