@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.takescake/1password",
+  "name": "io.github.CakeRepository/1password",
   "description": "MCP server for 1Password service accounts",
   "repository": {
-    "url": "https://github.com/takescake/1password-mcp",
+    "url": "https://github.com/CakeRepository/1Password-MCP.git",
     "source": "github"
   },
   "version": "1.0.3",
