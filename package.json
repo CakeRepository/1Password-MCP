@@ -1,6 +1,6 @@
 {
   "name": "@takescake/1password-mcp",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "private": false,
   "type": "module",
   "description": "MCP server for 1Password service accounts",
