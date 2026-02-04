@@ -1,6 +1,6 @@
 # 1Password MCP Server
 
-> [!CAUTION]
+>
 > **⚠️ IMPORTANT SECURITY & PRIVACY WARNING**
 >
 > - **NOT OFFICIAL**: This is **NOT** an official 1Password product. It is a community-developed tool.
