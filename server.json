@@ -6,12 +6,12 @@
     "url": "https://github.com/CakeRepository/1Password-MCP.git",
     "source": "github"
   },
-  "version": "2.0.2",
+  "version": "2.0.3",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@takescake/1password-mcp",
-      "version": "2.0.2",
+      "version": "2.0.3",
       "transport": {
         "type": "stdio"
       },
