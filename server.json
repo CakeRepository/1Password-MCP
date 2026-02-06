@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.CakeRepository/1password",
-  "description": "MCP server for 1Password service accounts — tools, prompts, and resources for vault and credential management",
+  "description": "MCP server for 1Password service accounts — tools and resources for vaults and credentials",
   "repository": {
     "url": "https://github.com/CakeRepository/1Password-MCP.git",
     "source": "github"
   },
-  "version": "2.0.0",
+  "version": "2.0.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@takescake/1password-mcp",
-      "version": "2.0.0",
+      "version": "2.0.1",
       "transport": {
         "type": "stdio"
       },
