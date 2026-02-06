@@ -4,12 +4,12 @@ node_modules/
 # Build outputs
 dist/
 build/
+*.tsbuildinfo
 
 # Logs
 *.log
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
 yarn-error.log*
 firebase-debug.log*
 
@@ -25,13 +25,21 @@ firebase-debug.log*
 .idea/
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
 
 # OS files
 .DS_Store
 Thumbs.db
+
+# Test coverage
+coverage/
 
 # Tools
 mcp-publisher
 mcp-publisher.exe
 mcp-publisher.tar.gz
 .mcpregistry*
+
+# TypeScript cache
+*.tsbuildinfo

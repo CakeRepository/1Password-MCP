@@ -1,33 +1,62 @@
 {
   "name": "@takescake/1password-mcp",
-  "version": "1.0.5",
+  "version": "2.0.0",
   "private": false,
   "type": "module",
-  "description": "MCP server for 1Password service accounts",
+  "description": "MCP server for 1Password service accounts — tools, prompts, and resources for vault and credential management",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/CakeRepository/1Password-MCP.git"
   },
+  "homepage": "https://github.com/CakeRepository/1Password-MCP#readme",
+  "bugs": {
+    "url": "https://github.com/CakeRepository/1Password-MCP/issues"
+  },
   "mcpName": "io.github.CakeRepository/1password",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "1password",
+    "password-manager",
+    "secrets",
+    "vault",
+    "service-account"
+  ],
   "engines": {
     "node": ">=18"
   },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node src/index.js"
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "tsc --noEmit",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "prepublishOnly": "npm run clean && npm run build && npm test"
   },
   "bin": {
     "1password-mcp": "bin/1password-mcp.js"
   },
   "files": [
     "bin",
-    "src",
+    "dist",
     "README.md",
-    "package.json"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "dependencies": {
     "@1password/sdk": "^0.3.1",
     "@modelcontextprotocol/sdk": "^1.7.0",
     "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
   }
 }
