@@ -39,7 +39,6 @@ describe("config", () => {
 
   it("exports correct server constants", () => {
     expect(SERVER_NAME).toBe("1password-mcp");
-    expect(SERVER_VERSION).toBe("2.0.3");
   });
 
   it("keeps the runtime version aligned with package.json", () => {
