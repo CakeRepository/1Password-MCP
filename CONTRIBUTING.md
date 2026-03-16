@@ -71,19 +71,22 @@ tests/
 
 ## Pull Request Process
 
-1. Fork the repo and create a feature branch from `main`.
+1. Fork the repo and create a feature branch from `master`.
 2. Make your changes and add/update tests.
 3. Run `npm run build && npm test` to ensure everything passes.
 4. Open a pull request with a clear description of your changes.
 
-## Reporting Issues
+## Release Process (for Maintainers)
 
-Please use [GitHub Issues](https://github.com/CakeRepository/1Password-MCP/issues) to report bugs or request features. Include:
+The project uses automated CI/CD for NPM releases.
 
-- Node.js version (`node -v`)
-- 1Password SDK version
-- Steps to reproduce
-- Expected vs actual behavior
+1. Update the version in `package.json`, `server.json`, and `src/config.ts`.
+2. Update `CHANGELOG.md` with the new version and changes.
+3. Commit and push to the `master` branch.
+4. The GitHub Action will automatically:
+   - Run tests on Node.js 18, 20, and 22.
+   - Build the project.
+   - Publish the new version to NPM.
 
 ## License
 
