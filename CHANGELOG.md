@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-03-15
+
+### Fixed
+
+- **Server version alignment** — Fixed a mismatch where the runtime MCP server reported a different version than `package.json`.
+- **Security: SDK upgrade** — Upgraded `@modelcontextprotocol/sdk` to v1.26.0 to address GHSA-345p-7cg4-v4c7.
+
+### Added
+
+- **Agents guide** — Created `agents.md` with instructions for publishing and managing the server.
+
+### Changed
+
+- **CI/CD Pipeline** — Updated GitHub Actions to correctly target the `master` branch.
+
 ## [2.0.0] - 2026-02-06
 
 ### Added
