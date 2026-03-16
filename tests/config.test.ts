@@ -2,8 +2,13 @@
  * Tests for src/config.ts — server configuration and CLI argument parsing.
  */
 
+import { readFileSync } from "node:fs";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { getConfig, resetConfig, SERVER_NAME, SERVER_VERSION } from "../src/config.js";
+
+const packageJson = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+) as { version: string };
 
 describe("config", () => {
   const originalArgv = process.argv;
@@ -34,7 +39,10 @@ describe("config", () => {
 
   it("exports correct server constants", () => {
     expect(SERVER_NAME).toBe("1password-mcp");
-    expect(SERVER_VERSION).toBe("2.0.0");
+  });
+
+  it("keeps the runtime version aligned with package.json", () => {
+    expect(SERVER_VERSION).toBe(packageJson.version);
   });
 
   it("defaults to info log level", () => {
