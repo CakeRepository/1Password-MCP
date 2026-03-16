@@ -5,7 +5,7 @@
 import { LOG_LEVEL_VALUES, type LogLevel } from "./types.js";
 
 export const SERVER_NAME = "1password-mcp";
-export const SERVER_VERSION = "2.4.0";
+export const SERVER_VERSION = "2.4.1";
 
 /** Parse a `--flag value` or `--flag=value` argument from process.argv. */
 function getArgValue(name: string): string | undefined {
