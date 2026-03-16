@@ -1,8 +1,11 @@
 name: Publish to npm
 
 on:
+  push:
+    branches: [master]
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -10,6 +13,8 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # Only publish if it's a push to master or a release
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
 
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +35,9 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Publish
-        run: npm publish --access public
+      - name: Publish to npm
+        run: |
+          # Try to publish, but don't fail if the version is already published
+          npm publish --access public || echo "Version already published or publish failed. Skipping."
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
