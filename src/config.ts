@@ -2,6 +2,7 @@
  * Server configuration: CLI arguments, environment variables, constants.
  */
 
+import { execFileSync } from "node:child_process";
 import { LOG_LEVEL_VALUES, type LogLevel } from "./types.js";
 
 export const SERVER_NAME = "1password-mcp";
@@ -31,10 +32,74 @@ export interface ServerConfig {
   /** Service account token (may be undefined until first use). */
   serviceAccountToken: string | undefined;
   /** Where the token came from. */
-  tokenSource: "args" | "env" | "missing";
+  tokenSource: "args" | "env" | "keychain" | "missing";
 }
 
 let _config: ServerConfig | undefined;
+
+interface MacOsKeychainLookupOptions {
+  service?: string;
+  account?: string;
+  platform?: NodeJS.Platform;
+  execFileSyncImpl?: typeof execFileSync;
+}
+
+export function readMacOsKeychainToken({
+  service,
+  account,
+  platform = process.platform,
+  execFileSyncImpl = execFileSync,
+}: MacOsKeychainLookupOptions): string | undefined {
+  if (!service || platform !== "darwin") return undefined;
+
+  const args = ["find-generic-password"];
+  if (account) args.push("-a", account);
+  args.push("-s", service, "-w");
+
+  try {
+    const token = execFileSyncImpl("security", args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return token || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function resolveServiceAccountToken({
+  tokenFromArgs,
+  env = process.env,
+  readKeychainToken = readMacOsKeychainToken,
+}: {
+  tokenFromArgs?: string;
+  env?: NodeJS.ProcessEnv;
+  readKeychainToken?: (options: {
+    service?: string;
+    account?: string;
+  }) => string | undefined;
+} = {}): Pick<ServerConfig, "serviceAccountToken" | "tokenSource"> {
+  const tokenFromEnv = env.OP_SERVICE_ACCOUNT_TOKEN;
+  const tokenFromKeychain =
+    tokenFromArgs || tokenFromEnv
+      ? undefined
+      : readKeychainToken({
+          service: env.OP_KEYCHAIN_SERVICE,
+          account: env.OP_KEYCHAIN_ACCOUNT,
+        });
+
+  const serviceAccountToken = tokenFromArgs ?? tokenFromEnv ?? tokenFromKeychain;
+
+  const tokenSource: ServerConfig["tokenSource"] = tokenFromArgs
+    ? "args"
+    : tokenFromEnv
+      ? "env"
+      : tokenFromKeychain
+        ? "keychain"
+        : "missing";
+
+  return { serviceAccountToken, tokenSource };
+}
 
 /** Build and cache the server configuration. */
 export function getConfig(): ServerConfig {
@@ -61,14 +126,8 @@ export function getConfig(): ServerConfig {
   const tokenFromArgs =
     getArgValue("service-account-token") ?? getArgValue("token");
 
-  const serviceAccountToken =
-    tokenFromArgs ?? process.env.OP_SERVICE_ACCOUNT_TOKEN;
-
-  const tokenSource: ServerConfig["tokenSource"] = tokenFromArgs
-    ? "args"
-    : process.env.OP_SERVICE_ACCOUNT_TOKEN
-      ? "env"
-      : "missing";
+  const { serviceAccountToken, tokenSource } =
+    resolveServiceAccountToken({ tokenFromArgs });
 
   _config = {
     logLevel: logLevelRaw,
