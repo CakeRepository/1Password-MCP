@@ -1,8 +1,6 @@
 name: Publish to npm
 
 on:
-  push:
-    branches: [master]
   release:
     types: [published]
   workflow_dispatch:
@@ -13,8 +11,8 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    # Only publish if it's a push to master or a release
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+    # Publish only for released tags or manual dispatches.
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +27,50 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate version alignment
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          SERVER_VERSION=$(node -p "require('./server.json').version")
+          CONFIG_VERSION=$(node -e "const fs=require('fs'); const s=fs.readFileSync('./src/config.ts','utf8'); const m=s.match(/export const SERVER_VERSION = \"([^\"]+)\";/); if(!m){process.exit(1)}; console.log(m[1]);")
+
+          echo "package.json version: ${PACKAGE_VERSION}"
+          echo "server.json version: ${SERVER_VERSION}"
+          echo "src/config.ts version: ${CONFIG_VERSION}"
+
+          if [ "${PACKAGE_VERSION}" != "${SERVER_VERSION}" ] || [ "${PACKAGE_VERSION}" != "${CONFIG_VERSION}" ]; then
+            echo "Version mismatch detected. Ensure package.json, server.json, and src/config.ts are identical."
+            exit 1
+          fi
+
+      - name: Validate release tag matches package version
+        if: github.event_name == 'release'
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+          EXPECTED_TAG="v${PACKAGE_VERSION}"
+
+          echo "release tag: ${RELEASE_TAG}"
+          echo "expected tag: ${EXPECTED_TAG}"
+
+          if [ "${RELEASE_TAG}" != "${EXPECTED_TAG}" ]; then
+            echo "Release tag does not match package version."
+            exit 1
+          fi
+
+      - name: Check if version already exists on npm
+        id: npm_check
+        run: |
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+            echo "Version ${PACKAGE_VERSION} is already published. Skipping publish."
+          else
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+            echo "Version ${PACKAGE_VERSION} is not published yet."
+          fi
+
       - name: Build
         run: npm run build
 
@@ -36,8 +78,7 @@ jobs:
         run: npm test
 
       - name: Publish to npm
-        run: |
-          # Try to publish, but don't fail if the version is already published
-          npm publish --access public || echo "Version already published or publish failed. Skipping."
+        if: steps.npm_check.outputs.already_published == 'false'
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
