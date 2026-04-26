@@ -18,9 +18,23 @@
       "environmentVariables": [
         {
           "name": "OP_SERVICE_ACCOUNT_TOKEN",
-          "description": "The Service Account Token from 1Password",
-          "isRequired": true,
+          "description": "The Service Account Token from 1Password (required unless OP_KEYCHAIN_SERVICE is used on macOS)",
+          "isRequired": false,
           "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "OP_KEYCHAIN_SERVICE",
+          "description": "macOS only: Keychain service name to read the 1Password service account token from when OP_SERVICE_ACCOUNT_TOKEN is not set",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "OP_KEYCHAIN_ACCOUNT",
+          "description": "macOS only: Optional Keychain account name to narrow the lookup used with OP_KEYCHAIN_SERVICE",
+          "isRequired": false,
+          "isSecret": false,
           "format": "string"
         }
       ]

@@ -3,8 +3,15 @@
  */
 
 import { readFileSync } from "node:fs";
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { getConfig, resetConfig, SERVER_NAME, SERVER_VERSION } from "../src/config.js";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import {
+  getConfig,
+  readMacOsKeychainToken,
+  resetConfig,
+  resolveServiceAccountToken,
+  SERVER_NAME,
+  SERVER_VERSION,
+} from "../src/config.js";
 
 const packageJson = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
@@ -22,6 +29,8 @@ describe("config", () => {
     delete process.env.OP_INTEGRATION_NAME;
     delete process.env.OP_INTEGRATION_VERSION;
     delete process.env.OP_SERVICE_ACCOUNT_TOKEN;
+    delete process.env.OP_KEYCHAIN_SERVICE;
+    delete process.env.OP_KEYCHAIN_ACCOUNT;
   });
 
   afterEach(() => {
@@ -101,6 +110,78 @@ describe("config", () => {
     const config = getConfig();
     expect(config.tokenSource).toBe("args");
     expect(config.serviceAccountToken).toBe("arg-token");
+  });
+
+  it("runs the expected macOS keychain lookup command", () => {
+    const execFileSyncImpl = vi.fn(() => "keychain-token\n");
+
+    const token = readMacOsKeychainToken({
+      service: "op-service-account",
+      account: "alice",
+      platform: "darwin",
+      execFileSyncImpl,
+    });
+
+    expect(token).toBe("keychain-token");
+    expect(execFileSyncImpl).toHaveBeenCalledWith("security", [
+      "find-generic-password",
+      "-a",
+      "alice",
+      "-s",
+      "op-service-account",
+      "-w",
+    ], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  });
+
+  it("skips macOS keychain lookup on non-macOS platforms", () => {
+    const execFileSyncImpl = vi.fn();
+
+    const token = readMacOsKeychainToken({
+      service: "op-service-account",
+      platform: "linux",
+      execFileSyncImpl,
+    });
+
+    expect(token).toBeUndefined();
+    expect(execFileSyncImpl).not.toHaveBeenCalled();
+  });
+
+  it("resolves token from macOS keychain when configured", () => {
+    const readKeychainToken = vi.fn(() => "keychain-token");
+
+    const config = resolveServiceAccountToken({
+      env: {
+        OP_KEYCHAIN_SERVICE: "op-service-account",
+        OP_KEYCHAIN_ACCOUNT: "alice",
+      },
+      readKeychainToken,
+    });
+
+    expect(config.tokenSource).toBe("keychain");
+    expect(config.serviceAccountToken).toBe("keychain-token");
+    expect(readKeychainToken).toHaveBeenCalledWith({
+      service: "op-service-account",
+      account: "alice",
+    });
+  });
+
+  it("prefers env token over macOS keychain lookup", () => {
+    const readKeychainToken = vi.fn(() => "keychain-token");
+
+    const config = resolveServiceAccountToken({
+      env: {
+        OP_SERVICE_ACCOUNT_TOKEN: "env-token",
+        OP_KEYCHAIN_SERVICE: "op-service-account",
+      },
+      readKeychainToken,
+    });
+
+    expect(config.tokenSource).toBe("env");
+    expect(config.serviceAccountToken).toBe("env-token");
+    expect(readKeychainToken).not.toHaveBeenCalled();
   });
 
   it("uses default integration name/version", () => {

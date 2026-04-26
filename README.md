@@ -68,6 +68,27 @@ A community-built [Model Context Protocol (MCP)](https://modelcontextprotocol.io
 }
 ```
 
+### macOS Keychain (JSON)
+
+If you do not want to store the service account token directly in your MCP config, macOS users can store it in Keychain and configure the server to read it at startup instead:
+
+```json
+{
+  "mcpServers": {
+    "1password": {
+      "command": "npx",
+      "args": ["-y", "@takescake/1password-mcp"],
+      "env": {
+        "OP_KEYCHAIN_SERVICE": "op-service-account-claude-automation",
+        "OP_KEYCHAIN_ACCOUNT": "your-macos-username"
+      }
+    }
+  }
+}
+```
+
+Precedence is: CLI arguments (`--service-account-token` / `--token`) > `OP_SERVICE_ACCOUNT_TOKEN` > macOS Keychain lookup. `OP_KEYCHAIN_ACCOUNT` is optional if your Keychain service name is already unique enough.
+
 ### OpenAI Codex (TOML)
 
 **Option A** (stores the token in config):
@@ -93,6 +114,8 @@ env_vars = ["OP_SERVICE_ACCOUNT_TOKEN"]
 Then set `OP_SERVICE_ACCOUNT_TOKEN` in your shell/session/CI environment.
 
 > **Note:** `codex mcp add ... --env OP_SERVICE_ACCOUNT_TOKEN=...` writes the token into Codex config. Use `env_vars` if you want the config to reference only the variable name.
+
+On macOS, you can also omit `OP_SERVICE_ACCOUNT_TOKEN` and set `OP_KEYCHAIN_SERVICE` (plus optional `OP_KEYCHAIN_ACCOUNT`) to read the token from Keychain at startup.
 
 ### CLI Options
 

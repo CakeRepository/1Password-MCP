@@ -16,7 +16,7 @@ export function requireServiceAccountToken(): string {
   if (!config.serviceAccountToken) {
     log("error", "Missing service account token.");
     throw new Error(
-      "Service account token is required. Provide it via --service-account-token or OP_SERVICE_ACCOUNT_TOKEN.",
+      "Service account token is required. Provide it via --service-account-token, OP_SERVICE_ACCOUNT_TOKEN, or macOS Keychain with OP_KEYCHAIN_SERVICE.",
     );
   }
   return config.serviceAccountToken;
