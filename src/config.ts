@@ -80,13 +80,13 @@ export function resolveServiceAccountToken({
   }) => string | undefined;
 } = {}): Pick<ServerConfig, "serviceAccountToken" | "tokenSource"> {
   const tokenFromEnv = env.OP_SERVICE_ACCOUNT_TOKEN;
-  const tokenFromKeychain =
-    tokenFromArgs || tokenFromEnv
-      ? undefined
-      : readKeychainToken({
-          service: env.OP_KEYCHAIN_SERVICE,
-          account: env.OP_KEYCHAIN_ACCOUNT,
-        });
+  let tokenFromKeychain: string | undefined;
+  if (!tokenFromArgs && !tokenFromEnv) {
+    tokenFromKeychain = readKeychainToken({
+      service: env.OP_KEYCHAIN_SERVICE,
+      account: env.OP_KEYCHAIN_ACCOUNT,
+    });
+  }
 
   const serviceAccountToken = tokenFromArgs ?? tokenFromEnv ?? tokenFromKeychain;
 

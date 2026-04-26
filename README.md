@@ -87,7 +87,7 @@ If you do not want to store the service account token directly in your MCP confi
 }
 ```
 
-`OP_SERVICE_ACCOUNT_TOKEN` still takes precedence when set. `OP_KEYCHAIN_ACCOUNT` is optional if your Keychain service name is already unique enough.
+Precedence is: CLI arguments (`--service-account-token` / `--token`) > `OP_SERVICE_ACCOUNT_TOKEN` > macOS Keychain lookup. `OP_KEYCHAIN_ACCOUNT` is optional if your Keychain service name is already unique enough.
 
 ### OpenAI Codex (TOML)
 
