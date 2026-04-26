@@ -3,7 +3,6 @@
 [![CI](https://github.com/CakeRepository/1Password-MCP/actions/workflows/ci.yml/badge.svg)](https://github.com/CakeRepository/1Password-MCP/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@takescake/1password-mcp)](https://www.npmjs.com/package/@takescake/1password-mcp)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-[![MCP Badge](https://lobehub.com/badge/mcp/cakerepository-1password-mcp)](https://lobehub.com/mcp/cakerepository-1password-mcp)
 
 A community-built [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that connects MCP-compatible AI clients (Claude Desktop, VS Code Copilot, OpenAI Codex, Gemini, etc.) to **1Password** vaults via a [Service Account](https://developer.1password.com/docs/service-accounts/).
 
