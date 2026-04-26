@@ -1,6 +1,6 @@
 {
   "name": "@takescake/1password-mcp",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "private": false,
   "type": "module",
   "description": "MCP server for 1Password service accounts — tools, prompts, and resources for vault and credential management",
