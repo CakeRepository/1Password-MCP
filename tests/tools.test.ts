@@ -49,12 +49,13 @@ describe("MCP Tools", () => {
     registerAllTools(server);
   });
 
-  it("registers all 9 tools", () => {
-    expect(registeredTools.size).toBe(9);
+  it("registers all 10 tools", () => {
+    expect(registeredTools.size).toBe(10);
     expect(registeredTools.has("vault_list")).toBe(true);
     expect(registeredTools.has("item_lookup")).toBe(true);
     expect(registeredTools.has("item_delete")).toBe(true);
     expect(registeredTools.has("item_get")).toBe(true);
+    expect(registeredTools.has("item_edit")).toBe(true);
     expect(registeredTools.has("password_create")).toBe(true);
     expect(registeredTools.has("password_read")).toBe(true);
     expect(registeredTools.has("password_update")).toBe(true);
@@ -321,6 +322,99 @@ describe("MCP Tools", () => {
 
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("Provide secretReference or both vaultId and itemId");
+    });
+  });
+
+  describe("item_edit", () => {
+    function makeClient() {
+      const put = vi.fn().mockImplementation((item: any) => Promise.resolve(item));
+      const get = vi.fn().mockResolvedValue({
+        id: "i1",
+        title: "Old Title",
+        category: "Login",
+        vaultId: "v1",
+        tags: ["old"],
+        notes: "old notes",
+        sections: [],
+        websites: [],
+        fields: [
+          { id: "username", title: "username", fieldType: "Text", value: "user" },
+          { id: "password", title: "password", fieldType: "Concealed", value: "old-pass" },
+          { id: "legacy", title: "legacy", fieldType: "Text", value: "remove-me" },
+        ],
+        version: 1,
+        files: [],
+        updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+      });
+      return { get, put };
+    }
+
+    it("updates title, replaces tags, and upserts/removes fields", async () => {
+      const { get, put } = makeClient();
+      mockedGetClient.mockResolvedValue({ items: { get, put } } as any);
+
+      const handler = registeredTools.get("item_edit")!.handler;
+      const result = await handler({
+        vaultId: "v1",
+        itemId: "i1",
+        title: "New Title",
+        tags: ["new"],
+        fields: [
+          { idOrTitle: "password", type: "concealed", value: "new-pass" },
+          { idOrTitle: "api-key", type: "concealed", value: "abc123", section: "s1" },
+        ],
+        removeFields: ["legacy"],
+      });
+      const data = JSON.parse(result.content[0].text);
+
+      expect(result.isError).toBeUndefined();
+      const putArg = put.mock.calls[0][0];
+      expect(putArg.title).toBe("New Title");
+      expect(putArg.tags).toEqual(["new"]);
+      // unreferenced field preserved
+      expect(putArg.fields.find((f: any) => f.id === "username").value).toBe("user");
+      // updated in place
+      expect(putArg.fields.find((f: any) => f.id === "password").value).toBe("new-pass");
+      // new field created
+      const created = putArg.fields.find((f: any) => f.id === "api-key");
+      expect(created.value).toBe("abc123");
+      expect(created.fieldType).toBe("Concealed");
+      expect(created.sectionId).toBe("s1");
+      // removed
+      expect(putArg.fields.find((f: any) => f.id === "legacy")).toBeUndefined();
+      expect(data.title).toBe("New Title");
+    });
+
+    it("clears notes when given an empty string", async () => {
+      const { get, put } = makeClient();
+      mockedGetClient.mockResolvedValue({ items: { get, put } } as any);
+
+      const handler = registeredTools.get("item_edit")!.handler;
+      await handler({ vaultId: "v1", itemId: "i1", notes: "" });
+
+      expect(put.mock.calls[0][0].notes).toBe("");
+    });
+
+    it("preserves notes when notes is omitted", async () => {
+      const { get, put } = makeClient();
+      mockedGetClient.mockResolvedValue({ items: { get, put } } as any);
+
+      const handler = registeredTools.get("item_edit")!.handler;
+      await handler({ vaultId: "v1", itemId: "i1", title: "X" });
+
+      expect(put.mock.calls[0][0].notes).toBe("old notes");
+    });
+
+    it("errors when the SDK cannot update items", async () => {
+      mockedGetClient.mockResolvedValue({
+        items: { get: vi.fn().mockResolvedValue({}) },
+      } as any);
+
+      const handler = registeredTools.get("item_edit")!.handler;
+      const result = await handler({ vaultId: "v1", itemId: "i1", title: "X" });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("does not support updating items");
     });
   });
 });
