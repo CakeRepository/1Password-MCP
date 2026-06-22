@@ -9,6 +9,7 @@ import { registerItemDelete } from "./item-delete.js";
 import { registerItemGet } from "./item-get.js";
 import { registerItemEdit } from "./item-edit.js";
 import { registerItemList } from "./item-list.js";
+import { registerItemArchive } from "./item-archive.js";
 import { registerNoteCreate } from "./note-create.js";
 import { registerPasswordCreate } from "./password-create.js";
 import { registerPasswordRead } from "./password-read.js";
@@ -24,6 +25,7 @@ export function registerAllTools(server: McpServer): void {
   registerItemGet(server);
   registerItemEdit(server);
   registerItemList(server);
+  registerItemArchive(server);
   registerNoteCreate(server);
   registerPasswordCreate(server);
   registerPasswordRead(server);
