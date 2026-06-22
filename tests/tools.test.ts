@@ -49,14 +49,15 @@ describe("MCP Tools", () => {
     registerAllTools(server);
   });
 
-  it("registers all 12 tools", () => {
-    expect(registeredTools.size).toBe(12);
+  it("registers all 13 tools", () => {
+    expect(registeredTools.size).toBe(13);
     expect(registeredTools.has("vault_list")).toBe(true);
     expect(registeredTools.has("item_lookup")).toBe(true);
     expect(registeredTools.has("item_delete")).toBe(true);
     expect(registeredTools.has("item_get")).toBe(true);
     expect(registeredTools.has("item_edit")).toBe(true);
     expect(registeredTools.has("item_list")).toBe(true);
+    expect(registeredTools.has("item_archive")).toBe(true);
     expect(registeredTools.has("note_create")).toBe(true);
     expect(registeredTools.has("password_create")).toBe(true);
     expect(registeredTools.has("password_read")).toBe(true);
@@ -542,6 +543,30 @@ describe("MCP Tools", () => {
 
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("does not support creating items");
+    });
+  });
+
+  describe("item_archive", () => {
+    it("archives an item and reports success", async () => {
+      const archive = vi.fn().mockResolvedValue(undefined);
+      mockedGetClient.mockResolvedValue({ items: { archive } } as any);
+
+      const handler = registeredTools.get("item_archive")!.handler;
+      const result = await handler({ vaultId: "v1", itemId: "i1" });
+      const data = JSON.parse(result.content[0].text);
+
+      expect(archive).toHaveBeenCalledWith("v1", "i1");
+      expect(data).toEqual({ archived: true, vaultId: "v1", itemId: "i1" });
+    });
+
+    it("errors when the SDK cannot archive items", async () => {
+      mockedGetClient.mockResolvedValue({ items: {} } as any);
+
+      const handler = registeredTools.get("item_archive")!.handler;
+      const result = await handler({ vaultId: "v1", itemId: "i1" });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("does not support archiving items");
     });
   });
 });
