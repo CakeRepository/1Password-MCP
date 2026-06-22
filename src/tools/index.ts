@@ -6,6 +6,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerVaultList } from "./vault-list.js";
 import { registerItemLookup } from "./item-lookup.js";
 import { registerItemDelete } from "./item-delete.js";
+import { registerItemGet } from "./item-get.js";
 import { registerPasswordCreate } from "./password-create.js";
 import { registerPasswordRead } from "./password-read.js";
 import { registerPasswordUpdate } from "./password-update.js";
@@ -17,6 +18,7 @@ export function registerAllTools(server: McpServer): void {
   registerVaultList(server);
   registerItemLookup(server);
   registerItemDelete(server);
+  registerItemGet(server);
   registerPasswordCreate(server);
   registerPasswordRead(server);
   registerPasswordUpdate(server);

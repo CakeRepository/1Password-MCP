@@ -49,11 +49,12 @@ describe("MCP Tools", () => {
     registerAllTools(server);
   });
 
-  it("registers all 8 tools", () => {
-    expect(registeredTools.size).toBe(8);
+  it("registers all 9 tools", () => {
+    expect(registeredTools.size).toBe(9);
     expect(registeredTools.has("vault_list")).toBe(true);
     expect(registeredTools.has("item_lookup")).toBe(true);
     expect(registeredTools.has("item_delete")).toBe(true);
+    expect(registeredTools.has("item_get")).toBe(true);
     expect(registeredTools.has("password_create")).toBe(true);
     expect(registeredTools.has("password_read")).toBe(true);
     expect(registeredTools.has("password_update")).toBe(true);
@@ -228,6 +229,94 @@ describe("MCP Tools", () => {
       mockedGetClient.mockResolvedValue({} as any);
 
       const handler = registeredTools.get("password_read")!.handler;
+      const result = await handler({});
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Provide secretReference or both vaultId and itemId");
+    });
+  });
+
+  describe("item_get", () => {
+    const sampleItem = {
+      id: "i1",
+      title: "GitHub",
+      category: "Login",
+      vaultId: "v1",
+      tags: ["dev"],
+      notes: "personal account",
+      sections: [{ id: "s1", title: "Extra" }],
+      fields: [
+        { id: "username", title: "username", fieldType: "Text", value: "octocat" },
+        { id: "password", title: "password", fieldType: "Concealed", value: "s3cr3t" },
+        { id: "pin", title: "pin", fieldType: "Concealed", value: "1234", sectionId: "s1" },
+      ],
+      websites: [{ url: "https://github.com", label: "website", autofillBehavior: "AnywhereOnWebsite" }],
+      updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+    };
+
+    it("conceals concealed field values by default", async () => {
+      mockedGetClient.mockResolvedValue({
+        items: { get: vi.fn().mockResolvedValue(sampleItem) },
+      } as any);
+
+      const handler = registeredTools.get("item_get")!.handler;
+      const result = await handler({ vaultId: "v1", itemId: "i1" });
+      const data = JSON.parse(result.content[0].text);
+
+      expect(data.title).toBe("GitHub");
+      expect(data.notes).toBe("personal account");
+      expect(data.tags).toEqual(["dev"]);
+      const username = data.fields.find((f: any) => f.id === "username");
+      const password = data.fields.find((f: any) => f.id === "password");
+      expect(username.value).toBe("octocat");
+      expect(password.value).toBe("[concealed]");
+      expect(password.section).toBeUndefined();
+      const pin = data.fields.find((f: any) => f.id === "pin");
+      expect(pin.section).toBe("s1");
+    });
+
+    it("reveals concealed values when reveal is true", async () => {
+      mockedGetClient.mockResolvedValue({
+        items: { get: vi.fn().mockResolvedValue(sampleItem) },
+      } as any);
+
+      const handler = registeredTools.get("item_get")!.handler;
+      const result = await handler({ vaultId: "v1", itemId: "i1", reveal: true });
+      const data = JSON.parse(result.content[0].text);
+
+      const password = data.fields.find((f: any) => f.id === "password");
+      expect(password.value).toBe("s3cr3t");
+    });
+
+    it("resolves vault/item from a secret reference", async () => {
+      const get = vi.fn().mockResolvedValue(sampleItem);
+      mockedGetClient.mockResolvedValue({
+        items: { get },
+        secrets: {
+          resolveAll: vi.fn().mockResolvedValue({
+            individualResponses: {
+              "op://Personal/GitHub/password": {
+                content: { secret: "s3cr3t", itemId: "i1", vaultId: "v1" },
+              },
+            },
+          }),
+        },
+      } as any);
+
+      const handler = registeredTools.get("item_get")!.handler;
+      const result = await handler({ secretReference: "op://Personal/GitHub/password" });
+      const data = JSON.parse(result.content[0].text);
+
+      expect(get).toHaveBeenCalledWith("v1", "i1");
+      expect(data.id).toBe("i1");
+    });
+
+    it("errors when neither secretReference nor vaultId/itemId provided", async () => {
+      mockedGetClient.mockResolvedValue({
+        items: { get: vi.fn() },
+      } as any);
+
+      const handler = registeredTools.get("item_get")!.handler;
       const result = await handler({});
 
       expect(result.isError).toBe(true);
