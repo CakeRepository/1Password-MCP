@@ -49,14 +49,15 @@ describe("MCP Tools", () => {
     registerAllTools(server);
   });
 
-  it("registers all 11 tools", () => {
-    expect(registeredTools.size).toBe(11);
+  it("registers all 12 tools", () => {
+    expect(registeredTools.size).toBe(12);
     expect(registeredTools.has("vault_list")).toBe(true);
     expect(registeredTools.has("item_lookup")).toBe(true);
     expect(registeredTools.has("item_delete")).toBe(true);
     expect(registeredTools.has("item_get")).toBe(true);
     expect(registeredTools.has("item_edit")).toBe(true);
     expect(registeredTools.has("item_list")).toBe(true);
+    expect(registeredTools.has("note_create")).toBe(true);
     expect(registeredTools.has("password_create")).toBe(true);
     expect(registeredTools.has("password_read")).toBe(true);
     expect(registeredTools.has("password_update")).toBe(true);
@@ -474,6 +475,73 @@ describe("MCP Tools", () => {
 
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("list boom");
+    });
+  });
+
+  describe("note_create", () => {
+    it("creates a SecureNote item with mapped fields", async () => {
+      const create = vi.fn().mockImplementation((params: any) =>
+        Promise.resolve({
+          id: "n1",
+          title: params.title,
+          vaultId: params.vaultId,
+          category: params.category,
+          tags: params.tags ?? [],
+          fields: params.fields ?? [],
+        }),
+      );
+      mockedGetClient.mockResolvedValue({ items: { create } } as any);
+
+      const handler = registeredTools.get("note_create")!.handler;
+      const result = await handler({
+        vaultId: "v1",
+        title: "Recovery codes",
+        notes: "keep safe",
+        tags: ["backup"],
+        fields: [{ idOrTitle: "code", type: "concealed", value: "abc-123" }],
+      });
+      const data = JSON.parse(result.content[0].text);
+
+      expect(result.isError).toBeUndefined();
+      const params = create.mock.calls[0][0];
+      expect(params.category).toBe("SecureNote");
+      expect(params.notes).toBe("keep safe");
+      expect(params.fields[0]).toEqual({
+        id: "code",
+        title: "code",
+        fieldType: "Concealed",
+        value: "abc-123",
+        sectionId: undefined,
+      });
+      expect(data.id).toBe("n1");
+      expect(data.category).toBe("SecureNote");
+    });
+
+    it("omits fields when none are provided", async () => {
+      const create = vi.fn().mockResolvedValue({
+        id: "n2",
+        title: "Plain",
+        vaultId: "v1",
+        category: "SecureNote",
+        tags: [],
+        fields: [],
+      });
+      mockedGetClient.mockResolvedValue({ items: { create } } as any);
+
+      const handler = registeredTools.get("note_create")!.handler;
+      await handler({ vaultId: "v1", title: "Plain", notes: "" });
+
+      expect(create.mock.calls[0][0].fields).toBeUndefined();
+    });
+
+    it("errors when the SDK cannot create items", async () => {
+      mockedGetClient.mockResolvedValue({ items: {} } as any);
+
+      const handler = registeredTools.get("note_create")!.handler;
+      const result = await handler({ vaultId: "v1", title: "X", notes: "y" });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("does not support creating items");
     });
   });
 });
