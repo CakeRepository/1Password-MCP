@@ -74,6 +74,22 @@ describe("MCP Tools", () => {
     }
   });
 
+  it("documents item_get secret references with a field segment", () => {
+    const itemGet = registeredTools.get("item_get")!;
+
+    expect(itemGet.description).toContain("op://vault/item/field");
+    expect(itemGet.schema.secretReference.description).toContain(
+      "op://vault/item/field",
+    );
+  });
+
+  it("documents note_create custom fields as id or title", () => {
+    const noteCreate = registeredTools.get("note_create")!;
+    const fieldInput = noteCreate.schema.fields.unwrap().element;
+
+    expect(fieldInput.shape.idOrTitle.description).toBe("Field id or title to create.");
+  });
+
   describe("vault_list", () => {
     it("returns vault summaries", async () => {
       mockedGetClient.mockResolvedValue({

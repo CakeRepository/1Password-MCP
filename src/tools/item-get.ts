@@ -40,13 +40,13 @@ function summarizeField(
 export function registerItemGet(server: McpServer): void {
   server.tool(
     "item_get",
-    "Retrieve a full 1Password item — title, category, tags, notes, and all fields (id, title, type, section). Concealed field values are hidden unless reveal is true. Accepts a secret reference (op://vault/item) or vault ID + item ID.",
+    "Retrieve a full 1Password item — title, category, tags, notes, and all fields (id, title, type, section). Concealed field values are hidden unless reveal is true. Accepts a secret reference (op://vault/item/field) or vault ID + item ID.",
     {
       secretReference: z
         .string()
         .optional()
         .describe(
-          "Secret reference in op://vault/item format. If provided, vaultId and itemId are ignored.",
+          "Secret reference in op://vault/item/field format. If provided, vaultId and itemId are ignored.",
         ),
       vaultId: z
         .string()

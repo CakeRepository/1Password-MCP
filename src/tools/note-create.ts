@@ -19,7 +19,7 @@ const fieldInput = z.object({
   idOrTitle: z
     .string()
     .min(1)
-    .describe("Field id and title to create."),
+    .describe("Field id or title to create."),
   type: z
     .enum(["text", "concealed"])
     .describe("Field type: 'text' for plain values, 'concealed' for secrets."),
