@@ -211,7 +211,24 @@ describe("MCP Tools", () => {
   });
 
   describe("password_read", () => {
-    it("resolves a secret reference", async () => {
+    it("resolves a secret reference and returns the value when reveal is true", async () => {
+      mockedGetClient.mockResolvedValue({
+        secrets: {
+          resolve: vi.fn().mockResolvedValue("my-secret-value"),
+        },
+      } as any);
+
+      const handler = registeredTools.get("password_read")!.handler;
+      const result = await handler({
+        secretReference: "op://vault/item/password",
+        reveal: true,
+      });
+      const data = JSON.parse(result.content[0].text);
+
+      expect(data.value).toBe("my-secret-value");
+    });
+
+    it("returns metadata only by default (reveal omitted)", async () => {
       mockedGetClient.mockResolvedValue({
         secrets: {
           resolve: vi.fn().mockResolvedValue("my-secret-value"),
@@ -224,7 +241,8 @@ describe("MCP Tools", () => {
       });
       const data = JSON.parse(result.content[0].text);
 
-      expect(data.value).toBe("my-secret-value");
+      expect(data.resolved).toBe(true);
+      expect(data.value).toBeUndefined();
     });
 
     it("returns metadata only when reveal is false", async () => {
