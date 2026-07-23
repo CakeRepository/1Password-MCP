@@ -33,6 +33,23 @@ export interface ServerConfig {
   serviceAccountToken: string | undefined;
   /** Where the token came from. */
   tokenSource: "args" | "env" | "keychain" | "missing";
+  /**
+   * Vault names/IDs that `op_run`/`op_check_ref` may resolve `op://` references
+   * from. An empty list means no restriction (any accessible vault is allowed).
+   */
+  allowedVaults: string[];
+}
+
+/**
+ * Parse a comma-separated vault allow-list. An unset/blank value yields an
+ * empty list, which the reference resolvers treat as "no restriction".
+ */
+export function parseAllowedVaults(raw: string | undefined): string[] {
+  if (!raw || !raw.trim()) return [];
+  return raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 let _config: ServerConfig | undefined;
@@ -129,6 +146,10 @@ export function getConfig(): ServerConfig {
   const { serviceAccountToken, tokenSource } =
     resolveServiceAccountToken({ tokenFromArgs });
 
+  const allowedVaults = parseAllowedVaults(
+    getArgValue("allowed-vaults") ?? process.env.OP_MCP_ALLOWED_VAULTS,
+  );
+
   _config = {
     logLevel: logLevelRaw,
     logLevelValue,
@@ -136,6 +157,7 @@ export function getConfig(): ServerConfig {
     integrationVersion,
     serviceAccountToken,
     tokenSource,
+    allowedVaults,
   };
 
   return _config;

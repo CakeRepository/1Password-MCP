@@ -49,8 +49,8 @@ describe("MCP Tools", () => {
     registerAllTools(server);
   });
 
-  it("registers all 13 tools", () => {
-    expect(registeredTools.size).toBe(13);
+  it("registers all 15 tools", () => {
+    expect(registeredTools.size).toBe(15);
     expect(registeredTools.has("vault_list")).toBe(true);
     expect(registeredTools.has("item_lookup")).toBe(true);
     expect(registeredTools.has("item_delete")).toBe(true);
@@ -64,6 +64,8 @@ describe("MCP Tools", () => {
     expect(registeredTools.has("password_update")).toBe(true);
     expect(registeredTools.has("password_generate")).toBe(true);
     expect(registeredTools.has("password_generate_memorable")).toBe(true);
+    expect(registeredTools.has("op_run")).toBe(true);
+    expect(registeredTools.has("op_check_ref")).toBe(true);
   });
 
   it("all tools have descriptions", () => {
