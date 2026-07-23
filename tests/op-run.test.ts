@@ -66,10 +66,18 @@ describe("op_run", () => {
     return registeredTools.get("op_run")!.handler;
   }
 
+  function mockBulkResolve(values: Record<string, string>) {
+    const resolveAll = vi.fn().mockImplementation(async (references: string[]) => ({
+      individualResponses: Object.fromEntries(
+        references.map((reference) => [reference, { content: { secret: values[reference] ?? "" } }]),
+      ),
+    }));
+    mockedGetClient.mockResolvedValue({ secrets: { resolveAll } } as any);
+    return resolveAll;
+  }
+
   it("resolves an op:// reference into env and the child process sees the value", async () => {
-    mockedGetClient.mockResolvedValue({
-      secrets: { resolve: vi.fn().mockResolvedValue("my-secret-value") },
-    } as any);
+    mockBulkResolve({ "op://Private/github/token": "my-secret-value" });
 
     const result = await handler()({
       argv: [
@@ -86,9 +94,7 @@ describe("op_run", () => {
   });
 
   it("redacts the resolved secret value out of stdout even if the command echoes it", async () => {
-    mockedGetClient.mockResolvedValue({
-      secrets: { resolve: vi.fn().mockResolvedValue("my-secret-value") },
-    } as any);
+    mockBulkResolve({ "op://Private/github/token": "my-secret-value" });
 
     const result = await handler()({
       argv: [node, "-e", "process.stdout.write('token=' + process.env.MY_SECRET)"],
@@ -102,9 +108,6 @@ describe("op_run", () => {
   });
 
   it("passes literal (non op://) env values through unchanged without calling 1Password", async () => {
-    const resolve = vi.fn();
-    mockedGetClient.mockResolvedValue({ secrets: { resolve } } as any);
-
     const result = await handler()({
       argv: [
         node,
@@ -116,7 +119,7 @@ describe("op_run", () => {
     const data = JSON.parse(result.content[0].text);
 
     expect(data.exitCode).toBe(0);
-    expect(resolve).not.toHaveBeenCalled();
+    expect(mockedGetClient).not.toHaveBeenCalled();
   });
 
   it("captures a nonzero exit code and stderr", async () => {
@@ -134,8 +137,8 @@ describe("op_run", () => {
   it("rejects an op:// reference from a vault outside a configured allow-list", async () => {
     process.env.OP_MCP_ALLOWED_VAULTS = "Private";
     resetConfig();
-    const resolve = vi.fn();
-    mockedGetClient.mockResolvedValue({ secrets: { resolve } } as any);
+    const resolveAll = vi.fn();
+    mockedGetClient.mockResolvedValue({ secrets: { resolveAll } } as any);
 
     const result = await handler()({
       argv: [node, "-e", "process.exit(0)"],
@@ -144,12 +147,10 @@ describe("op_run", () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("not in the allowed vault list");
-    expect(resolve).not.toHaveBeenCalled();
+    expect(resolveAll).not.toHaveBeenCalled();
   });
 
   it("errors when neither command nor argv is provided", async () => {
-    mockedGetClient.mockResolvedValue({ secrets: { resolve: vi.fn() } } as any);
-
     const result = await handler()({});
 
     expect(result.isError).toBe(true);
@@ -157,8 +158,6 @@ describe("op_run", () => {
   });
 
   it("errors when both command and argv are provided", async () => {
-    mockedGetClient.mockResolvedValue({ secrets: { resolve: vi.fn() } } as any);
-
     const result = await handler()({ command: "echo hi", argv: [node, "-e", "1"] });
 
     expect(result.isError).toBe(true);
@@ -166,7 +165,6 @@ describe("op_run", () => {
   });
 
   it("respects cwd when provided", async () => {
-    mockedGetClient.mockResolvedValue({ secrets: { resolve: vi.fn() } } as any);
     const cwd = process.cwd();
     const normalize = (p: string) => p.toLowerCase().replace(/\\/g, "/").replace(/\/$/, "");
 
@@ -177,5 +175,27 @@ describe("op_run", () => {
     const data = JSON.parse(result.content[0].text);
 
     expect(normalize(data.stdout)).toBe(normalize(cwd));
+  });
+
+  it("resolves multiple secret references with one bulk SDK request", async () => {
+    const resolveAll = mockBulkResolve({
+      "op://Private/first/token": "first-value",
+      "op://Private/second/token": "second-value",
+    });
+
+    const result = await handler()({
+      argv: [node, "-e", "process.exit(process.env.FIRST && process.env.SECOND ? 0 : 1)"],
+      env: {
+        FIRST: "op://Private/first/token",
+        SECOND: "op://Private/second/token",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(resolveAll).toHaveBeenCalledOnce();
+    expect(resolveAll).toHaveBeenCalledWith([
+      "op://Private/first/token",
+      "op://Private/second/token",
+    ]);
   });
 });

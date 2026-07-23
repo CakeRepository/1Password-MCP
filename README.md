@@ -29,7 +29,7 @@ A community-built [Model Context Protocol (MCP)](https://modelcontextprotocol.io
 | `password_update` | Rotate/update an existing password |
 | `password_generate` | Generate a cryptographically secure random password |
 | `password_generate_memorable` | Generate a memorable passphrase from ~500 dictionary words |
-| `op_run` | Run a local command with `op://` references injected as env vars; resolved secret plaintext is redacted from stdout/stderr and never logged (the MCP equivalent of `op run`) |
+| `op_run` | Run a local command with `op://` references injected as env vars; all references for that command resolve in one bulk SDK request, and plaintext is redacted from stdout/stderr and never logged (the MCP equivalent of `op run`) |
 | `op_check_ref` | Validate an `op://vault/item/field` reference and return only non-secret metadata (vault, item, field) confirming it resolves — never the value |
 
 ### Prompts (4)
