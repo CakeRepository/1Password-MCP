@@ -16,6 +16,8 @@ import { registerPasswordRead } from "./password-read.js";
 import { registerPasswordUpdate } from "./password-update.js";
 import { registerPasswordGenerate } from "./password-generate.js";
 import { registerPasswordGenerateMemorable } from "./password-generate-memorable.js";
+import { registerOpRun } from "./op-run.js";
+import { registerOpCheckRef } from "./op-check-ref.js";
 
 /** Register every tool with the MCP server. */
 export function registerAllTools(server: McpServer): void {
@@ -32,4 +34,6 @@ export function registerAllTools(server: McpServer): void {
   registerPasswordUpdate(server);
   registerPasswordGenerate(server);
   registerPasswordGenerateMemorable(server);
+  registerOpRun(server);
+  registerOpCheckRef(server);
 }

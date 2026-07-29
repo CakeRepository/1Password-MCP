@@ -12,7 +12,7 @@ A community-built [Model Context Protocol (MCP)](https://modelcontextprotocol.io
 
 ## Features
 
-### Tools (13)
+### Tools (15)
 
 | Tool | Description |
 |------|-------------|
@@ -29,6 +29,8 @@ A community-built [Model Context Protocol (MCP)](https://modelcontextprotocol.io
 | `password_update` | Rotate/update an existing password |
 | `password_generate` | Generate a cryptographically secure random password |
 | `password_generate_memorable` | Generate a memorable passphrase from ~500 dictionary words |
+| `op_run` | Run a local command with `op://` references injected as env vars; all references for that command resolve in one bulk SDK request, and plaintext is redacted from stdout/stderr and never logged (the MCP equivalent of `op run`) |
+| `op_check_ref` | Validate an `op://vault/item/field` reference and return only non-secret metadata (vault, item, field) confirming it resolves — never the value |
 
 ### Prompts (4)
 
@@ -121,6 +123,20 @@ Then set `OP_SERVICE_ACCOUNT_TOKEN` in your shell/session/CI environment.
 
 On macOS, you can also omit `OP_SERVICE_ACCOUNT_TOKEN` and set `OP_KEYCHAIN_SERVICE` (plus optional `OP_KEYCHAIN_ACCOUNT`) to read the token from Keychain at startup.
 
+#### Restricting `op_run` / `op_check_ref` to specific vaults (optional)
+
+By default, `op_run` and `op_check_ref` may resolve `op://` references from any
+vault the service account can access. To restrict them to an allow-list, set
+`OP_MCP_ALLOWED_VAULTS` (or pass `--allowed-vaults`) to a comma-separated list of
+vault names or IDs. References to any other vault are rejected before resolution.
+
+```jsonc
+"env": {
+  "OP_SERVICE_ACCOUNT_TOKEN": "YOUR_SERVICE_ACCOUNT_TOKEN",
+  "OP_MCP_ALLOWED_VAULTS": "Automation, CI"
+}
+```
+
 ### CLI Options
 
 ```
@@ -128,6 +144,7 @@ On macOS, you can also omit `OP_SERVICE_ACCOUNT_TOKEN` and set `OP_KEYCHAIN_SERV
 --log-level <level>               Log level: error, warn, info, debug (default: info)
 --integration-name <name>         Custom integration name for 1Password SDK
 --integration-version <version>   Custom integration version
+--allowed-vaults <list>           Comma-separated vault allow-list for op_run/op_check_ref (default: unrestricted)
 ```
 
 ---
