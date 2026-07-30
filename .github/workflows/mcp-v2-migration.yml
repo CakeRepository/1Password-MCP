@@ -165,6 +165,15 @@ jobs:
             );
             fs.writeFileSync(file, text);
           }
+
+          {
+            const file = 'tests/tools.test.ts';
+            let text = fs.readFileSync(file, 'utf8');
+            text = text
+              .replace('itemGet.schema.secretReference.description', 'itemGet.schema.shape.secretReference.description')
+              .replace('noteCreate.schema.fields.unwrap().element', 'noteCreate.schema.shape.fields.unwrap().element');
+            fs.writeFileSync(file, text);
+          }
           NODE
 
       - name: Fail on unresolved codemod markers
