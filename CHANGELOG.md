@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-07-29
+
+### Added
+
+- **`op_run` tool** — Run local commands with `op://` secret references injected into child-process environment variables without returning plaintext secret values to the model. Resolved values are redacted from command output and errors.
+- **`op_check_ref` tool** — Validate a 1Password secret reference and return only non-secret metadata.
+- **Optional vault allow-list** — Restrict `op_run` and `op_check_ref` to configured vault names or IDs with `OP_MCP_ALLOWED_VAULTS` or `--allowed-vaults`.
+
+### Changed
+
+- **Breaking: `password_read` is metadata-only by default** — Callers must now pass `reveal: true` to receive a plaintext secret value.
+- Updated `password_read` and `item_get` tool guidance to prefer `op_run` when a secret needs to be used rather than revealed.
+- `op_run` resolves multiple secret environment references in one bulk SDK request.
+
+### Security
+
+- Reduced accidental secret exposure in model context and conversation transcripts by making explicit plaintext reveal opt-in.
+
 ## [2.5.0] - 2026-07-04
 
 ### Added
