@@ -1,4 +1,5 @@
 # One-time runner; remove after the generated migration lands.
+# Runner revision 4: v2 registration test harness.
 name: MCP v2 migration
 
 on:
