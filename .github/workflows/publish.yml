@@ -4,15 +4,20 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+  # One-time trigger for the v4.0.0 release. Remove after success.
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/publish.yml
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
 
     steps:
       - uses: actions/checkout@v6
@@ -64,6 +69,17 @@ jobs:
           if [ "${RELEASE_TAG}" != "${EXPECTED_TAG}" ]; then
             echo "Release tag does not match package version."
             exit 1
+          fi
+
+      - name: Create v4.0.0 GitHub Release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v4.0.0 >/dev/null 2>&1; then
+            echo "Release v4.0.0 already exists."
+          else
+            gh release create v4.0.0 --target master --title "v4.0.0" --generate-notes
           fi
 
       - name: Check if version already exists on npm
