@@ -24,7 +24,7 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Run official MCP v1 to v2 codemod
-        run: npx --yes @modelcontextprotocol/codemod@beta v1-to-v2 .
+        run: npx --yes @modelcontextprotocol/codemod@2.0.0-beta.5 v1-to-v2 .
 
       - name: Enable 2026-07-28 and legacy stdio negotiation
         run: |
