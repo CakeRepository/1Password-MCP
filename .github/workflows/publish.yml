@@ -4,12 +4,6 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-  # One-time trigger used to validate trusted publishing for v3.0.0.
-  # Remove after the first successful OIDC publish.
-  push:
-    branches: [master]
-    paths:
-      - .github/workflows/publish.yml
 
 permissions:
   contents: read
@@ -18,7 +12,7 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v6
@@ -34,7 +28,7 @@ jobs:
         run: |
           node --version
           npm --version
-          node -e "const [major, minor, patch] = process.versions.node.split('.').map(Number); if (major < 22 || (major === 22 && minor < 14)) process.exit(1)"
+          node -e "const [major, minor] = process.versions.node.split('.').map(Number); if (major < 22 || (major === 22 && minor < 14)) process.exit(1)"
           npm install --global npm@latest
           npm --version
           node -e "const { execSync } = require('child_process'); const version = execSync('npm --version', { encoding: 'utf8' }).trim().split('.').map(Number); if (version[0] < 11 || (version[0] === 11 && version[1] < 5) || (version[0] === 11 && version[1] === 5 && version[2] < 1)) process.exit(1)"
