@@ -1,0 +1,38 @@
+name: Release v3.0.0
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - package.json
+      - server.json
+      - src/config.ts
+      - CHANGELOG.md
+      - .github/workflows/release-v3.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate release version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          test "$VERSION" = "3.0.0"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v3.0.0 >/dev/null 2>&1; then
+            echo "Release v3.0.0 already exists."
+          else
+            gh release create v3.0.0 \
+              --target "$GITHUB_SHA" \
+              --title "v3.0.0" \
+              --notes "Major security-focused release. password_read is now metadata-only unless reveal: true is explicitly supplied. Adds op_run and op_check_ref so agents can use and validate 1Password references without exposing plaintext secrets."
+          fi
