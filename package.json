@@ -1,9 +1,9 @@
 {
   "name": "@takescake/1password-mcp",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "private": false,
   "type": "module",
-  "description": "MCP server for 1Password service accounts — tools, prompts, and resources for vault and credential management",
+  "description": "Security-first MCP server for 1Password — vault/item tools, prompts, resources, and op_run secret injection (MCP 2026-07-28)",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -17,11 +17,17 @@
   "keywords": [
     "mcp",
     "model-context-protocol",
+    "mcp-server",
     "1password",
     "password-manager",
     "secrets",
+    "secret-management",
     "vault",
-    "service-account"
+    "service-account",
+    "op-run",
+    "claude",
+    "cursor",
+    "codex"
   ],
   "engines": {
     "node": ">=20"

@@ -6,7 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## 4.0.0 - 2026-07-29
+## [4.0.1] - 2026-07-29
+
+### Changed
+
+- **Documentation** — Rewrote README, CONTRIBUTING, and AGENTS for v4: all 15 tools, prompts, resources, `op_run` / reveal guidance, MCP **2026-07-28**, Node ≥ 20, and clearer setup for humans and agents.
+- **Package metadata** — Clearer npm/registry description, keywords, and `server.json` environment variable docs (`OP_MCP_ALLOWED_VAULTS`, `MCP_LOG_LEVEL`).
+
+## [4.0.0] - 2026-07-29
 
 ### Changed
 
@@ -14,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added stdio negotiation for MCP 2026-07-28 while retaining legacy client compatibility.
 - Raised the minimum supported Node.js version from 18 to 20.
 - Migrated tools, prompts, and resources to the v2 registration APIs and Zod 4 schemas.
+
 ## [3.0.0] - 2026-07-29
 
 ### Added

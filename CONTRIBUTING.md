@@ -1,54 +1,63 @@
 # Contributing to 1Password MCP Server
 
-Thank you for your interest in contributing! This guide will help you get started.
+Thanks for helping make `@takescake/1password-mcp` better. This guide covers local setup, structure, and how we ship changes.
 
-## Development Setup
+## Development setup
 
-1. **Clone the repository**
+1. **Clone**
 
    ```bash
    git clone https://github.com/CakeRepository/1Password-MCP.git
    cd 1Password-MCP
    ```
 
-2. **Install dependencies**
+2. **Requirements** — Node.js **≥ 20**, npm.
+
+3. **Install & verify**
 
    ```bash
-   npm install
-   ```
-
-3. **Build**
-
-   ```bash
+   npm ci
    npm run build
+   npm test
+   npm run lint
    ```
 
-4. **Run tests**
+4. **Watch mode** (optional)
 
    ```bash
-   npm test
+   npm run dev
    ```
 
-## Project Structure
+You do not need a live service account token for unit tests. For manual MCP smoke tests, set `OP_SERVICE_ACCOUNT_TOKEN` (or macOS Keychain vars) against a dedicated automation vault.
+
+## Project structure
 
 ```
 src/
-├── index.ts              # Server entrypoint
-├── types.ts              # Shared type definitions
+├── index.ts              # Server entrypoint (stdio + MCP negotiation)
+├── types.ts              # Shared types
 ├── logger.ts             # Structured logging to stderr
-├── config.ts             # CLI args, env vars, constants
+├── config.ts             # CLI args, env vars, Keychain, allow-list
 ├── client.ts             # 1Password SDK client singleton
+├── secret-ref.ts         # op:// parsing and vault allow-list
 ├── utils.ts              # Result helpers, password generation
-├── tools/                # MCP tool handlers
-│   ├── index.ts          # Tool registration barrel
+├── tools/                # MCP tool handlers (15)
+│   ├── index.ts
 │   ├── vault-list.ts
 │   ├── item-lookup.ts
+│   ├── item-list.ts
+│   ├── item-get.ts
+│   ├── item-edit.ts
 │   ├── item-delete.ts
+│   ├── item-archive.ts
+│   ├── note-create.ts
 │   ├── password-create.ts
 │   ├── password-read.ts
 │   ├── password-update.ts
 │   ├── password-generate.ts
-│   └── password-generate-memorable.ts
+│   ├── password-generate-memorable.ts
+│   ├── op-run.ts
+│   └── op-check-ref.ts
 ├── prompts/              # MCP prompt definitions
 │   └── index.ts
 └── resources/            # MCP resource definitions
@@ -57,37 +66,44 @@ tests/
 ├── utils.test.ts
 ├── config.test.ts
 ├── tools.test.ts
-└── prompts.test.ts
+├── prompts.test.ts
+├── secret-ref.test.ts
+├── op-run.test.ts
+└── op-check-ref.test.ts
 ```
+
+Version must stay aligned across `package.json`, `server.json`, and `SERVER_VERSION` in `src/config.ts`. See [AGENTS.md](AGENTS.md).
 
 ## Guidelines
 
-- **TypeScript** — All code must be written in TypeScript with strict mode.
-- **No `any`** — Avoid `any` types. Use `unknown` and narrow with type guards.
-- **Error handling** — Always use `errorResult()` from `utils.ts` for tool error responses.
-- **Logging** — Use the `log()` and `logError()` functions from `logger.ts`. Never write to `stdout` (reserved for MCP protocol).
-- **Tests** — Add tests for any new tool, prompt, or utility function.
-- **Commit messages** — Use [Conventional Commits](https://www.conventionalcommits.org/) (e.g., `feat: add item_delete tool`, `fix: modulo bias in password_generate`).
+- **TypeScript** — Strict mode; avoid `any` (prefer `unknown` + narrowing).
+- **Errors** — Use `errorResult()` from `utils.ts` for tool failures; set protocol-friendly error responses.
+- **Logging** — Use `log()` / `logError()` from `logger.ts`. Never write to `stdout` (reserved for MCP).
+- **Secrets** — Default to metadata-only responses. New tools that can expose plaintext must opt in explicitly (e.g. `reveal` / `returnSecret`). Prefer documenting `op_run` for “use without reveal.”
+- **Schemas** — Tool/prompt inputs use Zod 4 and the MCP v2 registration APIs.
+- **Tests** — Add or update Vitest coverage for new tools, prompts, and utilities.
+- **Commits** — [Conventional Commits](https://www.conventionalcommits.org/) (e.g. `feat: add item_archive tool`, `docs: refresh README for MCP 2026-07-28`).
 
-## Pull Request Process
+## Pull request process
 
-1. Fork the repo and create a feature branch from `master`.
-2. Make your changes and add/update tests.
-3. Run `npm run build && npm test` to ensure everything passes.
-4. Open a pull request with a clear description of your changes.
+1. Fork and branch from `master`.
+2. Make changes; update tests and docs when behavior or public surface changes.
+3. Run `npm run build && npm test && npm run lint`.
+4. Open a PR with a clear summary and test notes.
 
-## Release Process (for Maintainers)
+## Release process (maintainers)
 
-The project uses automated CI/CD for NPM releases.
+Automated publish runs from GitHub Releases via `publish.yml` (trusted publishing). Manual steps:
 
-1. Update the version in `package.json`, `server.json`, and `src/config.ts`.
-2. Update `CHANGELOG.md` with the new version and changes.
-3. Commit and push to the `master` branch.
-4. The GitHub Action will automatically:
-   - Run tests on Node.js 18, 20, and 22.
-   - Build the project.
-   - Publish the new version to NPM.
+1. Bump version in `package.json`, `server.json`, and `src/config.ts` (`SERVER_VERSION`).
+2. Update `CHANGELOG.md`.
+3. Merge to `master`, then create a GitHub Release tagged `vX.Y.Z` matching the package version.
+4. Confirm the publish workflow succeeds on npm.
+
+CI (`ci.yml`) builds and tests on push/PR to `master`. The published package requires **Node ≥ 20**.
+
+For agent-oriented publish checklists, see [AGENTS.md](AGENTS.md).
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the [Apache License 2.0](LICENSE).
+By contributing, you agree your contributions are licensed under the [Apache License 2.0](LICENSE).

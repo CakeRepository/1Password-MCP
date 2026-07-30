@@ -1,64 +1,128 @@
 # 1Password MCP Server
 
 [![CI](https://github.com/CakeRepository/1Password-MCP/actions/workflows/ci.yml/badge.svg)](https://github.com/CakeRepository/1Password-MCP/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/@takescake/1password-mcp)](https://www.npmjs.com/package/@takescake/1password-mcp)
+[![npm](https://img.shields.io/npm/v/@takescake/1password-mcp?color=cb3837)](https://www.npmjs.com/package/@takescake/1password-mcp)
+[![Node](https://img.shields.io/node/v/@takescake/1password-mcp)](https://www.npmjs.com/package/@takescake/1password-mcp)
+[![MCP](https://img.shields.io/badge/MCP-2026--07--28-0ea5e9)](https://modelcontextprotocol.io/specification/2026-07-28)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-A community-built [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that connects MCP-compatible AI clients (Claude Desktop, VS Code Copilot, OpenAI Codex, Gemini, etc.) to **1Password** vaults via a [Service Account](https://developer.1password.com/docs/service-accounts/).
+**Give your AI assistant a locked door to 1Password — not a pile of passwords in the chat.**
 
-> **Not an official 1Password product.** This is a community project.
+`@takescake/1password-mcp` is a community [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server. It lets Claude, Cursor, VS Code Copilot, OpenAI Codex, Gemini, and other MCP clients manage vaults and credentials through a [1Password Service Account](https://developer.1password.com/docs/service-accounts/).
+
+Built on the **MCP TypeScript SDK v2** with protocol negotiation for **[2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28)** (and legacy clients). Secrets stay in 1Password; agents prefer `op://` references and `op_run` so plaintext never has to land in the model transcript.
+
+> **Not an official 1Password product.** Community-built, Apache 2.0 licensed.
 
 ---
 
-## Features
+## Who this is for
+
+| You are… | You get… |
+|----------|----------|
+| **Not deeply technical** | A one-time setup: create a service account, paste the token into your AI app’s MCP settings, then ask in plain English (“list my automation vault”, “rotate the staging DB password”). |
+| **An agent / LLM** | Fifteen typed tools, four workflow prompts, three browsable resources, and clear rules: **prefer `op_run` + `op://` over revealing secrets**. |
+| **A developer / SRE** | Full item CRUD, secure notes, password generation, vault allow-lists, Keychain token loading on macOS, and CI-friendly env config. |
+
+---
+
+## Why teams pick this server
+
+- **Security-first defaults** — `password_read` and `item_get` return metadata unless you opt in with `reveal: true`.
+- **`op_run` (the MCP equivalent of `op run`)** — inject `op://vault/item/field` into a local command’s environment; plaintext is redacted from stdout/stderr and never logged back to the model.
+- **Full vault toolkit** — list, search, get, edit, create logins & notes, rotate passwords, archive, or delete.
+- **Guided prompts** — password generation, credential rotation, vault audit, and secret-reference helpers.
+- **Browsable resources** — vault and item catalogs over `1password://…` URIs (no secrets in resource payloads).
+- **Modern MCP** — stdio transport, Zod 4 schemas, MCP 2026-07-28 negotiation with legacy client compatibility.
+
+---
+
+## What you get
 
 ### Tools (15)
 
-| Tool | Description |
-|------|-------------|
-| `vault_list` | List all accessible vaults |
-| `item_lookup` | Search items by title in a vault |
-| `item_list` | List all items in a vault (id, title, category, tags, updatedAt) |
-| `item_get` | Retrieve a full item (title, category, tags, notes, fields); conceals secret values unless `reveal` is true |
-| `item_edit` | Edit an item's title, notes, tags, URL, and fields (upsert/remove); empty `notes` clears notes |
-| `item_delete` | Delete an item from a vault |
-| `item_archive` | Archive an item (move to archive instead of permanently deleting) |
-| `note_create` | Create a Secure Note item with optional tags and custom fields |
-| `password_create` | Create a new password/login item |
-| `password_read` | Retrieve a password via secret reference (`op://vault/item/field`) or vault/item ID |
-| `password_update` | Rotate/update an existing password |
-| `password_generate` | Generate a cryptographically secure random password |
-| `password_generate_memorable` | Generate a memorable passphrase from ~500 dictionary words |
-| `op_run` | Run a local command with `op://` references injected as env vars; all references for that command resolve in one bulk SDK request, and plaintext is redacted from stdout/stderr and never logged (the MCP equivalent of `op run`) |
-| `op_check_ref` | Validate an `op://vault/item/field` reference and return only non-secret metadata (vault, item, field) confirming it resolves — never the value |
+Grouped the way agents and humans actually use them.
+
+#### Discover
+
+| Tool | What it does |
+|------|----------------|
+| `vault_list` | List vaults the service account can access (id, name, description, type). |
+| `item_lookup` | Search a vault by title substring; optional `limit` (max 200). |
+| `item_list` | List every item in a vault (id, title, category, tags, `updatedAt`) — never secrets. |
+
+#### Read (safe by default)
+
+| Tool | What it does |
+|------|----------------|
+| `item_get` | Full item: title, category, tags, notes, fields. Concealed values stay hidden unless `reveal: true`. Accepts `op://…` **or** `vaultId` + `itemId`. |
+| `password_read` | Read one field (default `password`) via `op://…` or ids. **Metadata-only unless `reveal: true`.** Prefer `op_run` to *use* a secret. |
+| `op_check_ref` | Validate `op://vault/item/field` and return non-secret metadata only (vault, item, field). Never the value. |
+
+#### Create & update
+
+| Tool | What it does |
+|------|----------------|
+| `password_create` | Create a Login or Password item (username, URL, tags, notes). `returnSecret` defaults to `false`. |
+| `note_create` | Create a Secure Note with optional tags and custom fields. |
+| `password_update` | Rotate a password / concealed field (creates the field if missing). |
+| `item_edit` | Update title, notes (empty string clears), tags, URL; upsert or remove fields. Unreferenced fields stay untouched. |
+| `password_generate` | Cryptographically secure random password (length 8–128; symbols/numbers/uppercase toggles). |
+| `password_generate_memorable` | Memorable passphrase from a ~500-word list (word count, separator, number/symbol suffixes). |
+
+#### Use secrets without revealing them
+
+| Tool | What it does |
+|------|----------------|
+| `op_run` | Run a local command (`command` **or** `argv`) with env vars. Values matching `op://…` are resolved into the **child process only**; resolved secrets are redacted from returned output. Optional `cwd`, `shell`, `timeout_ms`, `stdin`. |
+
+#### Soft-delete & destroy
+
+| Tool | What it does |
+|------|----------------|
+| `item_archive` | Move an item to the archive (hidden from normal views). |
+| `item_delete` | Permanently delete an item — **cannot be undone**. |
 
 ### Prompts (4)
 
-| Prompt | Description |
-|--------|-------------|
-| `generate-secure-password` | Guided workflow to generate and store a secure password |
-| `credential-rotation` | Step-by-step credential rotation: read, generate, update, verify |
-| `vault-audit` | Audit vault contents: list items, categorize, flag concerns |
-| `secret-reference-helper` | Construct `op://vault/item/field` references interactively |
+| Prompt | When to use it |
+|--------|----------------|
+| `generate-secure-password` | Generate (random or memorable) and optionally store — without dumping the password into chat. |
+| `credential-rotation` | Find → verify access → generate → update → confirm `op://` reference. |
+| `vault-audit` | Inventory a vault by category; flag duplicates / oddities — never reveal secrets. |
+| `secret-reference-helper` | Build a paste-ready `op://vault/item/field` from names. |
 
 ### Resources (3)
 
-| Resource URI | Description |
-|-------------|-------------|
-| `1password://config` | Current server configuration (non-secret) |
-| `1password://vaults` | Browsable list of all accessible vaults |
-| `1password://vaults/{vaultId}/items` | Browsable list of items in a vault |
+| URI | Contents |
+|-----|----------|
+| `1password://config` | Non-secret server config (name, version, log level, token source, Node version). |
+| `1password://vaults` | JSON list of accessible vaults. |
+| `1password://vaults/{vaultId}/items` | JSON item metadata for one vault (no secret values). |
 
 ---
 
-## Quick Start
+## Before you start
 
-### Prerequisites
+You need two things:
 
-- **Node.js** >= 18
-- A [1Password Service Account token](https://developer.1password.com/docs/service-accounts/)
+1. **Node.js 20 or newer**
+2. A **1Password Service Account** with access to the vault(s) you want the AI to use
 
-### Claude Desktop / VS Code / IDEs (JSON)
+### Create a service account (plain English)
+
+1. Sign in to your 1Password account on the web.
+2. Open **Developer** → **Service Accounts** (or follow [1Password’s guide](https://developer.1password.com/docs/service-accounts/)).
+3. Create a service account and grant it **only** the vaults you want automation to touch (for example an `Automation` or `CI` vault — not your personal banking vault).
+4. Copy the token once. Treat it like a master key.
+
+---
+
+## Quick start
+
+### Claude Desktop / Cursor / VS Code / most IDEs
+
+Add this to your MCP config (exact file depends on the app):
 
 ```json
 {
@@ -74,9 +138,11 @@ A community-built [Model Context Protocol (MCP)](https://modelcontextprotocol.io
 }
 ```
 
-### macOS Keychain (JSON)
+Restart the app, then try: *“List my 1Password vaults.”*
 
-If you do not want to store the service account token directly in your MCP config, macOS users can store it in Keychain and configure the server to read it at startup instead:
+### macOS Keychain (no token in the config file)
+
+Store the token in Keychain, then point the server at it:
 
 ```json
 {
@@ -93,11 +159,11 @@ If you do not want to store the service account token directly in your MCP confi
 }
 ```
 
-Precedence is: CLI arguments (`--service-account-token` / `--token`) > `OP_SERVICE_ACCOUNT_TOKEN` > macOS Keychain lookup. `OP_KEYCHAIN_ACCOUNT` is optional if your Keychain service name is already unique enough.
+**Token resolution order:** CLI (`--service-account-token` / `--token`) → `OP_SERVICE_ACCOUNT_TOKEN` → macOS Keychain. `OP_KEYCHAIN_ACCOUNT` is optional when the service name alone is unique.
 
 ### OpenAI Codex (TOML)
 
-**Option A** (stores the token in config):
+**Option A** — token in config:
 
 ```toml
 [mcp_servers."1password"]
@@ -108,7 +174,7 @@ args = ["-y", "@takescake/1password-mcp"]
 OP_SERVICE_ACCOUNT_TOKEN = "YOUR_SERVICE_ACCOUNT_TOKEN"
 ```
 
-**Option B** *(recommended: does NOT store the token in Codex config)*:
+**Option B** *(recommended)* — config only names the env var:
 
 ```toml
 [mcp_servers."1password"]
@@ -117,101 +183,145 @@ args = ["-y", "@takescake/1password-mcp"]
 env_vars = ["OP_SERVICE_ACCOUNT_TOKEN"]
 ```
 
-Then set `OP_SERVICE_ACCOUNT_TOKEN` in your shell/session/CI environment.
+Set `OP_SERVICE_ACCOUNT_TOKEN` in your shell or CI. Note: `codex mcp add ... --env OP_SERVICE_ACCOUNT_TOKEN=...` writes the secret into Codex config; prefer `env_vars` when you can.
 
-> **Note:** `codex mcp add ... --env OP_SERVICE_ACCOUNT_TOKEN=...` writes the token into Codex config. Use `env_vars` if you want the config to reference only the variable name.
+On macOS you can omit the token env and use `OP_KEYCHAIN_SERVICE` (+ optional `OP_KEYCHAIN_ACCOUNT`) instead.
 
-On macOS, you can also omit `OP_SERVICE_ACCOUNT_TOKEN` and set `OP_KEYCHAIN_SERVICE` (plus optional `OP_KEYCHAIN_ACCOUNT`) to read the token from Keychain at startup.
+### Optional: lock `op_run` / `op_check_ref` to certain vaults
 
-#### Restricting `op_run` / `op_check_ref` to specific vaults (optional)
+By default those tools may resolve `op://` references from any vault the service account can see. To allow-list vaults:
 
-By default, `op_run` and `op_check_ref` may resolve `op://` references from any
-vault the service account can access. To restrict them to an allow-list, set
-`OP_MCP_ALLOWED_VAULTS` (or pass `--allowed-vaults`) to a comma-separated list of
-vault names or IDs. References to any other vault are rejected before resolution.
-
-```jsonc
-"env": {
-  "OP_SERVICE_ACCOUNT_TOKEN": "YOUR_SERVICE_ACCOUNT_TOKEN",
-  "OP_MCP_ALLOWED_VAULTS": "Automation, CI"
+```json
+{
+  "env": {
+    "OP_SERVICE_ACCOUNT_TOKEN": "YOUR_SERVICE_ACCOUNT_TOKEN",
+    "OP_MCP_ALLOWED_VAULTS": "Automation, CI"
+  }
 }
 ```
 
-### CLI Options
+Names or IDs work. References outside the list are rejected before resolution. Same setting via `--allowed-vaults`.
+
+---
+
+## For agents: how to handle secrets
+
+Follow this order every time:
+
+1. **Discover** with `vault_list` → `item_lookup` / `item_list` (metadata only).
+2. **Confirm a reference** with `op_check_ref` — never `reveal` just to see if a path exists.
+3. **Use** a secret in a command or API call with **`op_run`** and `op://vault/item/field` in `env`.
+4. **Reveal** with `password_read` / `item_get` + `reveal: true` only when the human explicitly needs the value in chat.
+5. **Rotate** with `password_generate` → `password_update` (keep `returnSecret: false` unless asked).
+6. Prefer **`item_archive`** over **`item_delete`** unless permanent removal is required.
+
+### `op_run` sketch
+
+```json
+{
+  "argv": ["curl", "-sS", "https://api.example.com/health"],
+  "env": {
+    "API_TOKEN": "op://Automation/Example API/credential"
+  },
+  "timeout_ms": 60000
+}
+```
+
+Prefer `argv` over a shell `command` string when you can — fewer quoting surprises.
+
+---
+
+## Configuration reference
+
+### Environment variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OP_SERVICE_ACCOUNT_TOKEN` | Usually yes | Service account token. Not required on macOS if Keychain vars are set. |
+| `OP_KEYCHAIN_SERVICE` | No | macOS: Keychain service name for the token. |
+| `OP_KEYCHAIN_ACCOUNT` | No | macOS: optional account to narrow the Keychain lookup. |
+| `OP_MCP_ALLOWED_VAULTS` | No | Comma-separated vault names/IDs allowed for `op_run` / `op_check_ref`. Empty = unrestricted. |
+| `OP_INTEGRATION_NAME` | No | Name reported to the 1Password SDK (default: `1password-mcp`). |
+| `OP_INTEGRATION_VERSION` | No | Version reported to the SDK (default: package version). |
+| `MCP_LOG_LEVEL` | No | `debug` \| `info` \| `warn` \| `error` (default: `info`). |
+| `MCP_DEBUG` | No | If set, forces debug logging. |
+
+### CLI flags
 
 ```
 --service-account-token <token>   1Password service account token
---log-level <level>               Log level: error, warn, info, debug (default: info)
---integration-name <name>         Custom integration name for 1Password SDK
+--token <token>                   Alias for --service-account-token
+--log-level <level>               error | warn | info | debug (default: info)
+--integration-name <name>         Custom integration name for the 1Password SDK
 --integration-version <version>   Custom integration version
---allowed-vaults <list>           Comma-separated vault allow-list for op_run/op_check_ref (default: unrestricted)
+--allowed-vaults <list>           Comma-separated allow-list for op_run / op_check_ref
 ```
 
 ---
 
-## Security & Privacy
+## Security & privacy
 
-> **Read this before using.**
+> **Read this before pointing the server at a vault you care about.**
 
-- **LLM privacy risk** -- Secrets retrieved/created may be sent to your LLM provider and could be retained depending on your provider/account settings.
-- **No E2E encryption in MCP** -- Secrets are plaintext inside the MCP workflow and in transit to the model. They are encrypted only once stored in 1Password.
-- **Intended use** -- Best for automated/disposable credentials (dev DB creds, bot/service accounts, CI tokens).
-- **Avoid high-stakes secrets** -- Do not use for banking, primary personal accounts, or other sensitive credentials. Use dedicated automation vaults.
-- **Token security** -- Treat the Service Account Token like a master key. Rotate immediately if exposed.
-- **Config files** -- Keep MCP config files out of version control (add to `.gitignore`).
-- **Secret references** -- Prefer `op://...` references over copying raw passwords into prompts or files.
-- **Least privilege** -- Use dedicated vaults and limited-scope service accounts for automation workflows.
+- **LLM privacy** — Anything revealed to the model may be sent to your AI provider and retained under their policies.
+- **MCP is not end-to-end encrypted for secrets in flight** — Values are plaintext inside the MCP workflow and toward the model. They are encrypted at rest in 1Password once stored.
+- **Best fit** — Automation credentials: CI tokens, bot accounts, disposable env secrets.
+- **Avoid** — Banking, primary personal logins, recovery codes, or anything you cannot afford to expose to a model provider.
+- **Token = master key** — Scope the service account tightly; rotate immediately if leaked; never commit tokens or MCP configs with secrets.
+- **Prefer references** — `op://…` + `op_run` beat pasting passwords into prompts or files.
+- **Least privilege** — Dedicated automation vaults beat sharing your whole account.
+
+---
+
+## Protocol & compatibility
+
+| Piece | Detail |
+|-------|--------|
+| Package | `@takescake/1password-mcp` |
+| Runtime | Node.js **≥ 20** |
+| Transport | **stdio** |
+| MCP SDK | `@modelcontextprotocol/server` v2 |
+| Protocol | Negotiates **2026-07-28**; keeps legacy client compatibility |
+| Registry name | `io.github.CakeRepository/1password` |
 
 ---
 
 ## Development
 
 ```bash
-# Clone and install
 git clone https://github.com/CakeRepository/1Password-MCP.git
 cd 1Password-MCP
-npm install
-
-# Build
+npm ci
 npm run build
-
-# Run tests
 npm test
-
-# Type-check
 npm run lint
-
-# Watch mode (dev)
-npm run dev
 ```
 
-### Project Structure
+Watch mode: `npm run dev`.
+
+### Project layout
 
 ```
 src/
-  index.ts              # Server entrypoint
-  types.ts              # Shared type definitions
-  logger.ts             # Structured logging (stderr)
-  config.ts             # CLI args, env vars, constants
-  client.ts             # 1Password SDK client singleton
-  utils.ts              # Result helpers, password generation
-  tools/                # MCP tool handlers
-    index.ts
-    vault-list.ts
-    item-lookup.ts
-    item-delete.ts
-    password-create.ts
-    password-read.ts
-    password-update.ts
-    password-generate.ts
-    password-generate-memorable.ts
-  prompts/              # MCP prompt definitions
-    index.ts
-  resources/            # MCP resource definitions
-    index.ts
+  index.ts                 # Entrypoint — MCP stdio + protocol negotiation
+  config.ts                # CLI / env / Keychain / allow-list
+  client.ts                # 1Password SDK client
+  logger.ts                # Structured logs on stderr (stdout is protocol)
+  secret-ref.ts            # op:// parsing & allow-list checks
+  utils.ts                 # Result helpers, password generation
+  tools/                   # All 15 MCP tools
+  prompts/                 # Interactive workflow prompts
+  resources/               # 1password:// resources
+tests/
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Maintainers / agents: [AGENTS.md](AGENTS.md).
+
+---
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history, including the **4.0.0** MCP v2 / 2026-07-28 migration and the **3.0.0** `op_run` / reveal-opt-in security changes.
 
 ---
 

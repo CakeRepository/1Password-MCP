@@ -1,38 +1,52 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.CakeRepository/1password",
-  "description": "MCP server for 1Password service accounts — tools and resources for vaults and credentials",
+  "description": "Security-first MCP server for 1Password service accounts — 15 tools, prompts, and resources with op_run secret injection and MCP 2026-07-28 support",
   "repository": {
     "url": "https://github.com/CakeRepository/1Password-MCP.git",
     "source": "github"
   },
-  "version": "4.0.0",
+  "version": "4.0.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@takescake/1password-mcp",
-      "version": "4.0.0",
+      "version": "4.0.1",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
           "name": "OP_SERVICE_ACCOUNT_TOKEN",
-          "description": "The Service Account Token from 1Password (required unless OP_KEYCHAIN_SERVICE is used on macOS)",
+          "description": "1Password service account token (required unless OP_KEYCHAIN_SERVICE is used on macOS)",
           "isRequired": false,
           "isSecret": true,
           "format": "string"
         },
         {
           "name": "OP_KEYCHAIN_SERVICE",
-          "description": "macOS only: Keychain service name to read the 1Password service account token from when OP_SERVICE_ACCOUNT_TOKEN is not set",
+          "description": "macOS only: Keychain service name to read the service account token when OP_SERVICE_ACCOUNT_TOKEN is unset",
           "isRequired": false,
           "isSecret": false,
           "format": "string"
         },
         {
           "name": "OP_KEYCHAIN_ACCOUNT",
-          "description": "macOS only: Optional Keychain account name to narrow the lookup used with OP_KEYCHAIN_SERVICE",
+          "description": "macOS only: Optional Keychain account name used with OP_KEYCHAIN_SERVICE",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "OP_MCP_ALLOWED_VAULTS",
+          "description": "Optional comma-separated vault names or IDs that op_run and op_check_ref may resolve (empty = unrestricted)",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "MCP_LOG_LEVEL",
+          "description": "Log level: debug, info, warn, or error (default: info)",
           "isRequired": false,
           "isSecret": false,
           "format": "string"
