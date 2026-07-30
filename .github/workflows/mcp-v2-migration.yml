@@ -1,3 +1,4 @@
+# One-time runner; remove after the generated migration lands.
 name: MCP v2 migration
 
 on:
