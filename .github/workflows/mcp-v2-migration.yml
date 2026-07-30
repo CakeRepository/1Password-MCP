@@ -1,23 +1,22 @@
 name: MCP v2 migration
 
 on:
-  push:
-    branches: [feat/mcp-2026-07-28]
-    paths:
-      - .github/workflows/mcp-v2-migration.yml
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
 
 jobs:
   migrate:
-    if: ${{ !contains(github.event.head_commit.message, '[mcp-v2-generated]') }}
+    if: ${{ github.head_ref == 'feat/mcp-2026-07-28' && !contains(github.event.pull_request.title, '[generated]') }}
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: feat/mcp-2026-07-28
+          ref: ${{ github.head_ref }}
 
       - uses: actions/setup-node@v6
         with:
@@ -38,7 +37,7 @@ jobs:
            * 2025-era connection.
            */
 
-          import { McpServer } from "@modelcontextprotocol/server/mcp";
+          import { McpServer } from "@modelcontextprotocol/server";
           import { serveStdio } from "@modelcontextprotocol/server/stdio";
           import { SERVER_NAME, SERVER_VERSION, getConfig } from "./config.js";
           import { log, logError } from "./logger.js";
@@ -113,22 +112,24 @@ jobs:
 
           const changelogPath = 'CHANGELOG.md';
           const changelog = fs.readFileSync(changelogPath, 'utf8');
-          const entry = [
-            '## 4.0.0 - 2026-07-29',
-            '',
-            '### Changed',
-            '',
-            '- Migrated to the stable MCP TypeScript SDK v2 package family.',
-            '- Added stdio negotiation for MCP 2026-07-28 while retaining legacy client compatibility.',
-            '- Raised the minimum supported Node.js version from 18 to 20.',
-            '- Migrated tools, prompts, and resources to the v2 registration APIs and Zod 4 schemas.',
-            '',
-          ].join('\n');
-          const marker = changelog.indexOf('\n## ');
-          const updated = marker >= 0
-            ? changelog.slice(0, marker + 1) + '\n' + entry + changelog.slice(marker + 1)
-            : changelog + '\n' + entry;
-          fs.writeFileSync(changelogPath, updated);
+          if (!changelog.includes('## 4.0.0 - 2026-07-29')) {
+            const entry = [
+              '## 4.0.0 - 2026-07-29',
+              '',
+              '### Changed',
+              '',
+              '- Migrated to the stable MCP TypeScript SDK v2 package family.',
+              '- Added stdio negotiation for MCP 2026-07-28 while retaining legacy client compatibility.',
+              '- Raised the minimum supported Node.js version from 18 to 20.',
+              '- Migrated tools, prompts, and resources to the v2 registration APIs and Zod 4 schemas.',
+              '',
+            ].join('\n');
+            const marker = changelog.indexOf('\n## ');
+            const updated = marker >= 0
+              ? changelog.slice(0, marker + 1) + '\n' + entry + changelog.slice(marker + 1)
+              : changelog + '\n' + entry;
+            fs.writeFileSync(changelogPath, updated);
+          }
           NODE
 
       - name: Install migrated dependencies
@@ -148,8 +149,12 @@ jobs:
 
       - name: Commit generated migration
         run: |
+          if git diff --quiet; then
+            echo "No migration changes to commit."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add package.json package-lock.json server.json CHANGELOG.md src tests
           git commit -m "feat: support MCP protocol 2026-07-28 [mcp-v2-generated]"
-          git push origin HEAD:feat/mcp-2026-07-28
+          git push origin HEAD:${{ github.head_ref }}
