@@ -142,6 +142,36 @@ jobs:
       - name: Install migrated dependencies
         run: npm install
 
+      - name: Migrate test registration harnesses
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const files = [
+            'tests/tools.test.ts',
+            'tests/op-run.test.ts',
+            'tests/op-check-ref.test.ts',
+          ];
+
+          for (const file of files) {
+            let text = fs.readFileSync(file, 'utf8');
+            text = text.replace(
+              /const originalTool = server\.tool\.bind\(server\);[\s\S]*?return originalTool\(\.\.\.args\);\n\s*\}\);/,
+              `const originalTool = server.registerTool.bind(server);\n    vi.spyOn(server, "registerTool").mockImplementation(((...args: any[]) => {\n      const [name, config, handler] = args;\n      registeredTools.set(name, {\n        description: config.description,\n        schema: config.inputSchema,\n        handler,\n      });\n      return originalTool(...(args as Parameters<typeof originalTool>));\n    }) as any);`,
+            );
+            fs.writeFileSync(file, text);
+          }
+
+          {
+            const file = 'tests/prompts.test.ts';
+            let text = fs.readFileSync(file, 'utf8');
+            text = text.replace(
+              /const originalPrompt = server\.prompt\.bind\(server\);[\s\S]*?return originalPrompt\(\.\.\.args\);\n\s*\}\);/,
+              `const originalPrompt = server.registerPrompt.bind(server);\n    vi.spyOn(server, "registerPrompt").mockImplementation(((...args: any[]) => {\n      const [name, config, handler] = args;\n      registeredPrompts.set(name, {\n        description: config.description,\n        params: config.argsSchema,\n        handler,\n      });\n      return originalPrompt(...(args as Parameters<typeof originalPrompt>));\n    }) as any);`,
+            );
+            fs.writeFileSync(file, text);
+          }
+          NODE
+
       - name: Fail on unresolved codemod markers
         run: |
           if grep -R "@mcp-codemod-error" src tests package.json; then
