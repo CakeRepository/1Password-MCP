@@ -11,7 +11,7 @@ import { jsonResult, errorResult } from "../utils.js";
 export function registerPasswordRead(server: McpServer): void {
   server.tool(
     "password_read",
-    "Retrieve a secret from 1Password using either a secret reference (op://vault/item/field) or vault ID + item ID. Supports field selection and optional value reveal.",
+    "Retrieve a secret from 1Password using either a secret reference (op://vault/item/field) or vault ID + item ID. Supports field selection and optional value reveal (defaults to metadata-only). Revealing a secret puts it in the model context/transcript — to USE a secret in a command or API call, prefer op_run with op:// references instead.",
     {
       secretReference: z
         .string()
@@ -35,7 +35,7 @@ export function registerPasswordRead(server: McpServer): void {
         .boolean()
         .optional()
         .describe(
-          "If false, return metadata only without the secret value. Defaults to true.",
+          "If true, include the secret value in plaintext in the response — this puts the secret in the model context/transcript. Defaults to false; prefer op_run to use a secret without revealing it.",
         ),
     },
     async ({ secretReference, vaultId, itemId, field, reveal }) => {
@@ -48,6 +48,7 @@ export function registerPasswordRead(server: McpServer): void {
           reveal,
         });
         const client = await getClient();
+        const shouldReveal = reveal === true;
 
         if (secretReference) {
           if (!client?.secrets?.resolve) {
@@ -56,7 +57,7 @@ export function registerPasswordRead(server: McpServer): void {
             );
           }
           const value = await client.secrets.resolve(secretReference);
-          if (reveal === false) {
+          if (!shouldReveal) {
             return jsonResult({ resolved: true });
           }
           return jsonResult({ value });
@@ -88,7 +89,7 @@ export function registerPasswordRead(server: McpServer): void {
           throw new Error(`Field '${desiredField}' not found on item.`);
         }
 
-        if (reveal === false) {
+        if (!shouldReveal) {
           return jsonResult({
             id: item.id,
             title: item.title,

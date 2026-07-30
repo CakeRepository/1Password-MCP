@@ -40,7 +40,7 @@ function summarizeField(
 export function registerItemGet(server: McpServer): void {
   server.tool(
     "item_get",
-    "Retrieve a full 1Password item — title, category, tags, notes, and all fields (id, title, type, section). Concealed field values are hidden unless reveal is true. Accepts a secret reference (op://vault/item/field) or vault ID + item ID.",
+    "Retrieve a full 1Password item — title, category, tags, notes, and all fields (id, title, type, section). Concealed field values are hidden unless reveal is true. Accepts a secret reference (op://vault/item/field) or vault ID + item ID. Revealing a secret puts it in the model context/transcript — to USE a secret in a command or API call, prefer op_run with op:// references instead.",
     {
       secretReference: z
         .string()
@@ -60,7 +60,7 @@ export function registerItemGet(server: McpServer): void {
         .boolean()
         .optional()
         .describe(
-          "If true, include concealed field values in plaintext. Defaults to false for security.",
+          "If true, include concealed field values in plaintext — this puts the secret in the model context/transcript. Defaults to false; prefer op_run to use a secret without revealing it.",
         ),
     },
     async ({ secretReference, vaultId, itemId, reveal }) => {
