@@ -8,6 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { McpServer } from "@modelcontextprotocol/server";
 
 vi.mock("../src/client.js", () => ({
   getClient: vi.fn(),
@@ -19,8 +20,6 @@ vi.mock("../src/logger.js", () => ({
   log: vi.fn(),
   logError: vi.fn(),
 }));
-
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getClient } from "../src/client.js";
 import { resetConfig } from "../src/config.js";
 import { registerAllTools } from "../src/tools/index.js";
@@ -40,17 +39,16 @@ describe("op_run", () => {
 
     server = new McpServer({ name: "test", version: "0.0.0" });
     registeredTools = new Map();
-    const originalTool = server.tool.bind(server);
-    vi.spyOn(server, "tool").mockImplementation((...args: any[]) => {
-      if (args.length === 4) {
-        registeredTools.set(args[0], {
-          description: args[1],
-          schema: args[2],
-          handler: args[3],
-        });
-      }
-      return originalTool(...args);
-    });
+    const originalTool = server.registerTool.bind(server);
+    vi.spyOn(server, "registerTool").mockImplementation(((...args: any[]) => {
+      const [name, config, handler] = args;
+      registeredTools.set(name, {
+        description: config.description,
+        schema: config.inputSchema,
+        handler,
+      });
+      return originalTool(...(args as Parameters<typeof originalTool>));
+    }) as any);
     registerAllTools(server);
   });
 

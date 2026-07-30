@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { McpServer } from "@modelcontextprotocol/server";
 
 // Mock the client module before importing tools
 vi.mock("../src/client.js", () => ({
@@ -16,8 +17,6 @@ vi.mock("../src/logger.js", () => ({
   log: vi.fn(),
   logError: vi.fn(),
 }));
-
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getClient } from "../src/client.js";
 import { registerAllTools } from "../src/tools/index.js";
 
@@ -33,18 +32,16 @@ describe("MCP Tools", () => {
 
     // Spy on server.tool to capture registered handlers
     registeredTools = new Map();
-    const originalTool = server.tool.bind(server);
-    vi.spyOn(server, "tool").mockImplementation((...args: any[]) => {
-      // The 4-arg overload: (name, description, schema, handler)
-      if (args.length === 4) {
-        registeredTools.set(args[0], {
-          description: args[1],
-          schema: args[2],
-          handler: args[3],
-        });
-      }
-      return originalTool(...args);
-    });
+    const originalTool = server.registerTool.bind(server);
+    vi.spyOn(server, "registerTool").mockImplementation(((...args: any[]) => {
+      const [name, config, handler] = args;
+      registeredTools.set(name, {
+        description: config.description,
+        schema: config.inputSchema,
+        handler,
+      });
+      return originalTool(...(args as Parameters<typeof originalTool>));
+    }) as any);
 
     registerAllTools(server);
   });
@@ -80,14 +77,14 @@ describe("MCP Tools", () => {
     const itemGet = registeredTools.get("item_get")!;
 
     expect(itemGet.description).toContain("op://vault/item/field");
-    expect(itemGet.schema.secretReference.description).toContain(
+    expect(itemGet.schema.shape.secretReference.description).toContain(
       "op://vault/item/field",
     );
   });
 
   it("documents note_create custom fields as id or title", () => {
     const noteCreate = registeredTools.get("note_create")!;
-    const fieldInput = noteCreate.schema.fields.unwrap().element;
+    const fieldInput = noteCreate.schema.shape.fields.unwrap().element;
 
     expect(fieldInput.shape.idOrTitle.description).toBe("Field id or title to create.");
   });

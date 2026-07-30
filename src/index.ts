@@ -1,32 +1,31 @@
 /**
  * 1Password MCP Server — main entrypoint.
  *
- * Wires together the MCP server with tools, prompts, resources,
- * and the stdio transport.
+ * Builds one server instance per stdio connection and lets the MCP v2
+ * transport negotiate either protocol revision 2026-07-28 or a legacy
+ * 2025-era connection.
  */
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { SERVER_NAME, SERVER_VERSION, getConfig } from "./config.js";
 import { log, logError } from "./logger.js";
 import { registerAllTools } from "./tools/index.js";
 import { registerAllPrompts } from "./prompts/index.js";
 import { registerAllResources } from "./resources/index.js";
 
-// ─── Create the MCP server ──────────────────────────────────────────
+export function buildServer(): McpServer {
+  const server = new McpServer({
+    name: SERVER_NAME,
+    version: SERVER_VERSION,
+  });
 
-const server = new McpServer({
-  name: SERVER_NAME,
-  version: SERVER_VERSION,
-});
+  registerAllTools(server);
+  registerAllPrompts(server);
+  registerAllResources(server);
 
-// ─── Register capabilities ──────────────────────────────────────────
-
-registerAllTools(server);
-registerAllPrompts(server);
-registerAllResources(server);
-
-// ─── Global error handlers ──────────────────────────────────────────
+  return server;
+}
 
 process.on("uncaughtException", (error) => {
   logError("Uncaught exception.", error);
@@ -35,8 +34,6 @@ process.on("uncaughtException", (error) => {
 process.on("unhandledRejection", (reason) => {
   logError("Unhandled rejection.", reason);
 });
-
-// ─── Start ──────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
   const config = getConfig();
@@ -50,10 +47,8 @@ async function main(): Promise<void> {
     tokenSource: config.tokenSource,
   });
 
-  const transport = new StdioServerTransport();
-  log("info", "Connecting MCP server transport.");
-  await server.connect(transport);
-  log("info", "MCP server connected. Awaiting requests.");
+  log("info", "Starting MCP stdio protocol negotiation.");
+  await serveStdio(() => buildServer());
 }
 
 main().catch((error) => {

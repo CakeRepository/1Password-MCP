@@ -1,8 +1,7 @@
 /**
  * MCP Resources — browsable data exposed by the 1Password MCP server.
  */
-
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { getClient } from "../client.js";
 import { getConfig, SERVER_NAME, SERVER_VERSION } from "../config.js";
 import { log, logError } from "../logger.js";
@@ -11,7 +10,7 @@ import { log, logError } from "../logger.js";
 export function registerAllResources(server: McpServer): void {
   // ─── 1password://config ───────────────────────────────────────────
 
-  server.resource(
+  server.registerResource(
     "server-config",
     "1password://config",
     {
@@ -47,7 +46,7 @@ export function registerAllResources(server: McpServer): void {
 
   // ─── 1password://vaults ───────────────────────────────────────────
 
-  server.resource(
+  server.registerResource(
     "vault-list",
     "1password://vaults",
     {
@@ -98,7 +97,7 @@ export function registerAllResources(server: McpServer): void {
 
   // ─── 1password://vaults/{vaultId}/items ───────────────────────────
 
-  server.resource(
+  server.registerResource(
     "vault-items",
     "1password://vaults/{vaultId}/items",
     {

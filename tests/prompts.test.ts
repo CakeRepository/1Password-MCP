@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { McpServer } from "@modelcontextprotocol/server";
 
 // Mock the client and logger
 vi.mock("../src/client.js", () => ({
@@ -13,8 +14,6 @@ vi.mock("../src/logger.js", () => ({
   log: vi.fn(),
   logError: vi.fn(),
 }));
-
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerAllPrompts } from "../src/prompts/index.js";
 
 describe("MCP Prompts", () => {
@@ -26,18 +25,16 @@ describe("MCP Prompts", () => {
     server = new McpServer({ name: "test", version: "0.0.0" });
 
     registeredPrompts = new Map();
-    const originalPrompt = server.prompt.bind(server);
-    vi.spyOn(server, "prompt").mockImplementation((...args: any[]) => {
-      // (name, description, params, handler)
-      if (args.length === 4) {
-        registeredPrompts.set(args[0], {
-          description: args[1],
-          params: args[2],
-          handler: args[3],
-        });
-      }
-      return originalPrompt(...args);
-    });
+    const originalPrompt = server.registerPrompt.bind(server);
+    vi.spyOn(server, "registerPrompt").mockImplementation(((...args: any[]) => {
+      const [name, config, handler] = args;
+      registeredPrompts.set(name, {
+        description: config.description,
+        params: config.argsSchema,
+        handler,
+      });
+      return originalPrompt(...(args as Parameters<typeof originalPrompt>));
+    }) as any);
 
     registerAllPrompts(server);
   });

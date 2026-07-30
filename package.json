@@ -1,6 +1,6 @@
 {
   "name": "@takescake/1password-mcp",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "private": false,
   "type": "module",
   "description": "MCP server for 1Password service accounts — tools, prompts, and resources for vault and credential management",
@@ -24,7 +24,7 @@
     "service-account"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -51,8 +51,8 @@
   ],
   "dependencies": {
     "@1password/sdk": "^0.3.1",
-    "@modelcontextprotocol/sdk": "^1.26.0",
-    "zod": "^3.23.8"
+    "zod": "^4.0.0",
+    "@modelcontextprotocol/server": "^2.0.0-beta.5"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

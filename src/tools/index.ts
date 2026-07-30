@@ -1,8 +1,7 @@
 /**
  * Barrel module — registers all MCP tools on the server.
  */
-
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { registerVaultList } from "./vault-list.js";
 import { registerItemLookup } from "./item-lookup.js";
 import { registerItemDelete } from "./item-delete.js";
