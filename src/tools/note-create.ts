@@ -1,8 +1,7 @@
 /**
  * note_create — Create a Secure Note item in a 1Password vault.
  */
-
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
   ItemCategory,
@@ -31,73 +30,68 @@ const fieldInput = z.object({
 });
 
 export function registerNoteCreate(server: McpServer): void {
-  server.tool(
-    "note_create",
-    "Create a Secure Note item in a 1Password vault, with optional tags and custom fields.",
-    {
-      vaultId: z.string().min(1).describe("Vault ID to create the note in."),
-      title: z.string().min(1).describe("Note title."),
-      notes: z
-        .string()
-        .describe("Note body text. Pass an empty string for an empty note."),
-      tags: z
-        .array(z.string().min(1))
-        .optional()
-        .describe("Optional tags for organization."),
-      fields: z
-        .array(fieldInput)
-        .optional()
-        .describe("Optional custom fields to attach to the note."),
-    },
-    async ({ vaultId, title, notes, tags, fields }) => {
-      try {
-        // NOTE: field values are intentionally excluded from logs.
-        log("debug", "Tool call: note_create.", {
-          vaultId,
-          title,
-          fieldCount: fields?.length ?? 0,
-        });
-        const client = await getClient();
-        if (!client?.items?.create) {
-          throw new Error(
-            "Your @1password/sdk version does not support creating items.",
-          );
-        }
+  server.registerTool("note_create", { description: "Create a Secure Note item in a 1Password vault, with optional tags and custom fields.", inputSchema: z.object({
+              vaultId: z.string().min(1).describe("Vault ID to create the note in."),
+              title: z.string().min(1).describe("Note title."),
+              notes: z
+                .string()
+                .describe("Note body text. Pass an empty string for an empty note."),
+              tags: z
+                .array(z.string().min(1))
+                .optional()
+                .describe("Optional tags for organization."),
+              fields: z
+                .array(fieldInput)
+                .optional()
+                .describe("Optional custom fields to attach to the note."),
+            }) }, async ({ vaultId, title, notes, tags, fields }) => {
+              try {
+                // NOTE: field values are intentionally excluded from logs.
+                log("debug", "Tool call: note_create.", {
+                  vaultId,
+                  title,
+                  fieldCount: fields?.length ?? 0,
+                });
+                const client = await getClient();
+                if (!client?.items?.create) {
+                  throw new Error(
+                    "Your @1password/sdk version does not support creating items.",
+                  );
+                }
 
-        const itemFields: ItemField[] = (fields ?? []).map((field) => ({
-          id: field.idOrTitle,
-          title: field.idOrTitle,
-          fieldType:
-            field.type === "concealed"
-              ? ItemFieldType.Concealed
-              : ItemFieldType.Text,
-          value: field.value,
-          sectionId: field.section,
-        }));
+                const itemFields: ItemField[] = (fields ?? []).map((field) => ({
+                  id: field.idOrTitle,
+                  title: field.idOrTitle,
+                  fieldType:
+                    field.type === "concealed"
+                      ? ItemFieldType.Concealed
+                      : ItemFieldType.Text,
+                  value: field.value,
+                  sectionId: field.section,
+                }));
 
-        const params: ItemCreateParams = {
-          category: ItemCategory.SecureNote,
-          vaultId,
-          title,
-          notes,
-          tags,
-          fields: itemFields.length > 0 ? itemFields : undefined,
-        };
+                const params: ItemCreateParams = {
+                  category: ItemCategory.SecureNote,
+                  vaultId,
+                  title,
+                  notes,
+                  tags,
+                  fields: itemFields.length > 0 ? itemFields : undefined,
+                };
 
-        const item = await client.items.create(params);
+                const item = await client.items.create(params);
 
-        return jsonResult({
-          id: item.id,
-          title: item.title,
-          vaultId: item.vaultId,
-          category: item.category,
-          tags: item.tags ?? [],
-          fieldCount: item.fields?.length ?? 0,
-        });
-      } catch (error) {
-        logError("note_create failed.", error);
-        return errorResult(error);
-      }
-    },
-  );
+                return jsonResult({
+                  id: item.id,
+                  title: item.title,
+                  vaultId: item.vaultId,
+                  category: item.category,
+                  tags: item.tags ?? [],
+                  fieldCount: item.fields?.length ?? 0,
+                });
+              } catch (error) {
+                logError("note_create failed.", error);
+                return errorResult(error);
+              }
+            });
 }

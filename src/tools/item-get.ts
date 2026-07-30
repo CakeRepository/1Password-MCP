@@ -1,8 +1,7 @@
 /**
  * item_get — Retrieve a full 1Password item, with concealed values hidden by default.
  */
-
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { ItemFieldType, type Item, type ItemField } from "@1password/sdk";
 import { getClient } from "../client.js";
@@ -38,97 +37,92 @@ function summarizeField(
 }
 
 export function registerItemGet(server: McpServer): void {
-  server.tool(
-    "item_get",
-    "Retrieve a full 1Password item — title, category, tags, notes, and all fields (id, title, type, section). Concealed field values are hidden unless reveal is true. Accepts a secret reference (op://vault/item/field) or vault ID + item ID. Revealing a secret puts it in the model context/transcript — to USE a secret in a command or API call, prefer op_run with op:// references instead.",
-    {
-      secretReference: z
-        .string()
-        .optional()
-        .describe(
-          "Secret reference in op://vault/item/field format. If provided, vaultId and itemId are ignored.",
-        ),
-      vaultId: z
-        .string()
-        .optional()
-        .describe("Vault ID containing the item (required if secretReference is not provided)."),
-      itemId: z
-        .string()
-        .optional()
-        .describe("Item ID to retrieve (required if secretReference is not provided)."),
-      reveal: z
-        .boolean()
-        .optional()
-        .describe(
-          "If true, include concealed field values in plaintext — this puts the secret in the model context/transcript. Defaults to false; prefer op_run to use a secret without revealing it.",
-        ),
-    },
-    async ({ secretReference, vaultId, itemId, reveal }) => {
-      try {
-        log("debug", "Tool call: item_get.", {
-          secretReference: Boolean(secretReference),
-          vaultId,
-          itemId,
-          reveal,
-        });
-        const client = await getClient();
-        if (!client?.items?.get) {
-          throw new Error(
-            "Your @1password/sdk version does not support getting items.",
-          );
-        }
+  server.registerTool("item_get", { description: "Retrieve a full 1Password item — title, category, tags, notes, and all fields (id, title, type, section). Concealed field values are hidden unless reveal is true. Accepts a secret reference (op://vault/item/field) or vault ID + item ID. Revealing a secret puts it in the model context/transcript — to USE a secret in a command or API call, prefer op_run with op:// references instead.", inputSchema: z.object({
+              secretReference: z
+                .string()
+                .optional()
+                .describe(
+                  "Secret reference in op://vault/item/field format. If provided, vaultId and itemId are ignored.",
+                ),
+              vaultId: z
+                .string()
+                .optional()
+                .describe("Vault ID containing the item (required if secretReference is not provided)."),
+              itemId: z
+                .string()
+                .optional()
+                .describe("Item ID to retrieve (required if secretReference is not provided)."),
+              reveal: z
+                .boolean()
+                .optional()
+                .describe(
+                  "If true, include concealed field values in plaintext — this puts the secret in the model context/transcript. Defaults to false; prefer op_run to use a secret without revealing it.",
+                ),
+            }) }, async ({ secretReference, vaultId, itemId, reveal }) => {
+              try {
+                log("debug", "Tool call: item_get.", {
+                  secretReference: Boolean(secretReference),
+                  vaultId,
+                  itemId,
+                  reveal,
+                });
+                const client = await getClient();
+                if (!client?.items?.get) {
+                  throw new Error(
+                    "Your @1password/sdk version does not support getting items.",
+                  );
+                }
 
-        let resolvedVaultId = vaultId;
-        let resolvedItemId = itemId;
+                let resolvedVaultId = vaultId;
+                let resolvedItemId = itemId;
 
-        if (secretReference) {
-          if (!client?.secrets?.resolveAll) {
-            throw new Error(
-              "Your @1password/sdk version does not support resolving secret references.",
-            );
-          }
-          const resolved = await client.secrets.resolveAll([secretReference]);
-          const response = resolved.individualResponses[secretReference];
-          if (!response?.content) {
-            const reason = response?.error?.type ?? "unknown";
-            throw new Error(
-              `Could not resolve secret reference '${secretReference}' (${reason}).`,
-            );
-          }
-          resolvedVaultId = response.content.vaultId;
-          resolvedItemId = response.content.itemId;
-        }
+                if (secretReference) {
+                  if (!client?.secrets?.resolveAll) {
+                    throw new Error(
+                      "Your @1password/sdk version does not support resolving secret references.",
+                    );
+                  }
+                  const resolved = await client.secrets.resolveAll([secretReference]);
+                  const response = resolved.individualResponses[secretReference];
+                  if (!response?.content) {
+                    const reason = response?.error?.type ?? "unknown";
+                    throw new Error(
+                      `Could not resolve secret reference '${secretReference}' (${reason}).`,
+                    );
+                  }
+                  resolvedVaultId = response.content.vaultId;
+                  resolvedItemId = response.content.itemId;
+                }
 
-        if (!resolvedVaultId || !resolvedItemId) {
-          throw new Error(
-            "Provide secretReference or both vaultId and itemId.",
-          );
-        }
+                if (!resolvedVaultId || !resolvedItemId) {
+                  throw new Error(
+                    "Provide secretReference or both vaultId and itemId.",
+                  );
+                }
 
-        const item: Item = await client.items.get(resolvedVaultId, resolvedItemId);
-        const shouldReveal = reveal === true;
+                const item: Item = await client.items.get(resolvedVaultId, resolvedItemId);
+                const shouldReveal = reveal === true;
 
-        return jsonResult({
-          id: item.id,
-          title: item.title,
-          category: item.category,
-          vaultId: item.vaultId,
-          tags: item.tags ?? [],
-          notes: item.notes ?? "",
-          sections: (item.sections ?? []).map((section) => ({
-            id: section.id,
-            title: section.title,
-          })),
-          fields: (item.fields ?? []).map((field) =>
-            summarizeField(field, shouldReveal),
-          ),
-          websites: (item.websites ?? []).map((site) => site.url),
-          updatedAt: item.updatedAt,
-        });
-      } catch (error) {
-        logError("item_get failed.", error);
-        return errorResult(error);
-      }
-    },
-  );
+                return jsonResult({
+                  id: item.id,
+                  title: item.title,
+                  category: item.category,
+                  vaultId: item.vaultId,
+                  tags: item.tags ?? [],
+                  notes: item.notes ?? "",
+                  sections: (item.sections ?? []).map((section) => ({
+                    id: section.id,
+                    title: section.title,
+                  })),
+                  fields: (item.fields ?? []).map((field) =>
+                    summarizeField(field, shouldReveal),
+                  ),
+                  websites: (item.websites ?? []).map((site) => site.url),
+                  updatedAt: item.updatedAt,
+                });
+              } catch (error) {
+                logError("item_get failed.", error);
+                return errorResult(error);
+              }
+            });
 }
