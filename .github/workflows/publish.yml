@@ -4,7 +4,7 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-  # One-time trigger for the v4.0.0 release. Remove after success.
+  # One-time PR-merge trigger for the v4.0.0 release. Remove after success.
   push:
     branches: [master]
     paths:
