@@ -7,6 +7,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { spawn } from "node:child_process";
 import { z } from "zod";
 import { getClient } from "../client.js";
+import { getConfig } from "../config.js";
 import { log, logError } from "../logger.js";
 import { jsonResult, errorResult } from "../utils.js";
 import { isSecretRef, parseSecretRef, assertVaultAllowed } from "../secret-ref.js";
@@ -14,11 +15,22 @@ import { isSecretRef, parseSecretRef, assertVaultAllowed } from "../secret-ref.j
 const MAX_OUTPUT_BYTES = 5 * 1024 * 1024; // 5 MiB safety cap per stream
 const DEFAULT_TIMEOUT_MS = 120_000;
 
+const SENSITIVE_SERVER_ENV_VARS = [
+  "OP_SERVICE_ACCOUNT_TOKEN",
+  "OP_KEYCHAIN_SERVICE",
+  "OP_KEYCHAIN_ACCOUNT",
+] as const;
+
 interface ResolvedEnvEntry {
   name: string;
   value: string;
   /** True if this env var came from an op:// reference and must be redacted from output. */
   secret: boolean;
+}
+
+interface RedactionTarget {
+  name: string;
+  value: string;
 }
 
 /** Resolve every secret reference needed by one command in one bulk SDK request. */
@@ -61,24 +73,69 @@ async function resolveEnvEntries(
   return entries;
 }
 
+/** Collect every secret string that must be redacted from outputs/errors. */
+function getRedactionTargets(
+  resolvedEnv: ResolvedEnvEntry[],
+): RedactionTarget[] {
+  const targets: RedactionTarget[] = [];
+  const seen = new Set<string>();
+
+  // 1. Secrets resolved from op:// references
+  for (const entry of resolvedEnv) {
+    if (entry.secret && entry.value.length > 0 && !seen.has(entry.value)) {
+      targets.push({ name: entry.name, value: entry.value });
+      seen.add(entry.value);
+    }
+  }
+
+  // 2. Defense-in-depth: Server's own service account token (from config or process.env)
+  try {
+    const configToken = getConfig().serviceAccountToken;
+    if (configToken && configToken.length > 0 && !seen.has(configToken)) {
+      targets.push({ name: "OP_SERVICE_ACCOUNT_TOKEN", value: configToken });
+      seen.add(configToken);
+    }
+  } catch {
+    // Ignore config lookup error
+  }
+
+  const envToken = process.env.OP_SERVICE_ACCOUNT_TOKEN;
+  if (envToken && envToken.length > 0 && !seen.has(envToken)) {
+    targets.push({ name: "OP_SERVICE_ACCOUNT_TOKEN", value: envToken });
+    seen.add(envToken);
+  }
+
+  return targets;
+}
+
 /** Replace every occurrence of every secret value with a redaction marker. */
-function redact(text: string, secrets: ResolvedEnvEntry[]): string {
+function redact(text: string, targets: RedactionTarget[]): string {
   let redacted = text;
-  for (const entry of secrets) {
-    if (!entry.secret || entry.value.length === 0) continue;
+  for (const target of targets) {
+    if (target.value.length === 0) continue;
     // split/join instead of a RegExp so secret values with special
     // characters ($, *, (, etc.) are matched literally.
-    redacted = redacted.split(entry.value).join(`«REDACTED:${entry.name}»`);
+    redacted = redacted.split(target.value).join(`«REDACTED:${target.name}»`);
   }
   return redacted;
 }
 
-function truncate(buffer: Buffer): { text: string; truncated: boolean } {
-  if (buffer.length <= MAX_OUTPUT_BYTES) {
-    return { text: buffer.toString("utf8"), truncated: false };
+function truncateAndRedact(
+  buffer: Buffer,
+  targets: RedactionTarget[],
+): { text: string; truncated: boolean } {
+  // Redact the full text first so secret values spanning the truncation
+  // boundary are matched and masked completely before slicing.
+  const rawText = buffer.toString("utf8");
+  const redactedText = redact(rawText, targets);
+  const redactedBuffer = Buffer.from(redactedText, "utf8");
+
+  if (redactedBuffer.length <= MAX_OUTPUT_BYTES) {
+    return { text: redactedText, truncated: false };
   }
+
   return {
-    text: buffer.subarray(0, MAX_OUTPUT_BYTES).toString("utf8"),
+    text: redactedBuffer.subarray(0, MAX_OUTPUT_BYTES).toString("utf8"),
     truncated: true,
   };
 }
@@ -149,6 +206,9 @@ export function registerOpRun(server: McpServer): void {
 
                 resolvedEnv = await resolveEnvEntries(env);
                 const childEnv: NodeJS.ProcessEnv = { ...process.env };
+                for (const envVar of SENSITIVE_SERVER_ENV_VARS) {
+                  delete childEnv[envVar];
+                }
                 for (const entry of resolvedEnv) {
                   childEnv[entry.name] = entry.value;
                 }
@@ -219,14 +279,18 @@ export function registerOpRun(server: McpServer): void {
                 });
 
                 const durationMs = Date.now() - startedAt;
-                const { text: stdoutRaw, truncated: stdoutTruncated } = truncate(result.stdout);
-                const { text: stderrRaw, truncated: stderrTruncated } = truncate(result.stderr);
-
-                const stdout = redact(stdoutRaw, resolvedEnv);
-                const stderr = redact(stderrRaw, resolvedEnv);
+                const redactionTargets = getRedactionTargets(resolvedEnv);
+                const { text: stdout, truncated: stdoutTruncated } = truncateAndRedact(
+                  result.stdout,
+                  redactionTargets,
+                );
+                const { text: stderr, truncated: stderrTruncated } = truncateAndRedact(
+                  result.stderr,
+                  redactionTargets,
+                );
 
                 if (result.spawnError) {
-                  const message = redact(result.spawnError.message, resolvedEnv);
+                  const message = redact(result.spawnError.message, redactionTargets);
                   logError("op_run spawn failed.", new Error(message));
                   return errorResult(new Error(message));
                 }
@@ -251,8 +315,9 @@ export function registerOpRun(server: McpServer): void {
               } catch (error) {
                 // Redact even on the error path in case a partially-resolved secret
                 // ended up embedded in the thrown error's message.
-                const message = error instanceof Error ? redact(error.message, resolvedEnv) : String(error);
-                const safeError = new Error(message);
+                const targets = getRedactionTargets(resolvedEnv);
+                const rawMessage = error instanceof Error ? error.message : String(error);
+                const safeError = new Error(redact(rawMessage, targets));
                 logError("op_run failed.", safeError);
                 return errorResult(safeError);
               }
