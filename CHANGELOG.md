@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [4.0.2] - 2026-08-31
+
+### Security
+
+- **Fixed service account token leak in `op_run`** — `op_run` now strips the MCP server's credentials (`OP_SERVICE_ACCOUNT_TOKEN`, `OP_KEYCHAIN_SERVICE`, `OP_KEYCHAIN_ACCOUNT`) from the child process environment before execution, preventing ambient token leakage to subprocesses.
+- **Defense-in-depth output redaction** — Added the server's master service account token to the output redaction targets so any ambient or direct echoing in stdout, stderr, spawn errors, or thrown exceptions is masked with `«REDACTED:OP_SERVICE_ACCOUNT_TOKEN»`.
+- **Boundary-safe secret redaction** — Full redaction is now applied prior to output truncation, preventing secret values that straddle the 5 MiB stream cap from surviving as partial unredacted substrings.
+- Thanks to independent security researcher **Syed Anas Mohiuddin** for responsibly discovering, analyzing, and reporting this vulnerability.
+
 ## [4.0.1] - 2026-07-29
 
 ### Changed

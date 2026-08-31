@@ -196,4 +196,89 @@ describe("op_run", () => {
       "op://Private/second/token",
     ]);
   });
+
+  it("strips server OP_SERVICE_ACCOUNT_TOKEN and keychain credentials from child environment", async () => {
+    process.env.OP_SERVICE_ACCOUNT_TOKEN = "ops_secret_master_token_12345";
+    process.env.OP_KEYCHAIN_SERVICE = "my-keychain-svc";
+    process.env.OP_KEYCHAIN_ACCOUNT = "my-keychain-acc";
+    resetConfig();
+
+    const result = await handler()({
+      argv: [
+        node,
+        "-e",
+        "process.stdout.write(JSON.stringify({ token: process.env.OP_SERVICE_ACCOUNT_TOKEN, svc: process.env.OP_KEYCHAIN_SERVICE, acc: process.env.OP_KEYCHAIN_ACCOUNT }))",
+      ],
+    });
+    const data = JSON.parse(result.content[0].text);
+
+    expect(data.exitCode).toBe(0);
+    const envObserved = JSON.parse(data.stdout);
+    expect(envObserved.token).toBeUndefined();
+    expect(envObserved.svc).toBeUndefined();
+    expect(envObserved.acc).toBeUndefined();
+  });
+
+  it("redacts server OP_SERVICE_ACCOUNT_TOKEN from output as defense-in-depth", async () => {
+    process.env.OP_SERVICE_ACCOUNT_TOKEN = "ops_secret_master_token_12345";
+    resetConfig();
+
+    const result = await handler()({
+      argv: [
+        node,
+        "-e",
+        "process.stdout.write('leaked=' + 'ops_secret_master_token_12345'); process.stderr.write('err=' + 'ops_secret_master_token_12345')",
+      ],
+    });
+    const data = JSON.parse(result.content[0].text);
+
+    expect(data.exitCode).toBe(0);
+    expect(data.stdout).not.toContain("ops_secret_master_token_12345");
+    expect(data.stderr).not.toContain("ops_secret_master_token_12345");
+    expect(data.stdout).toBe("leaked=«REDACTED:OP_SERVICE_ACCOUNT_TOKEN»");
+    expect(data.stderr).toBe("err=«REDACTED:OP_SERVICE_ACCOUNT_TOKEN»");
+  });
+
+  it("allows caller to explicitly inject OP_SERVICE_ACCOUNT_TOKEN via op:// reference and redacts it", async () => {
+    process.env.OP_SERVICE_ACCOUNT_TOKEN = "original-server-token";
+    resetConfig();
+    mockBulkResolve({ "op://Private/custom/token": "injected-custom-token" });
+
+    const result = await handler()({
+      argv: [
+        node,
+        "-e",
+        "process.stdout.write('active=' + process.env.OP_SERVICE_ACCOUNT_TOKEN)",
+      ],
+      env: { OP_SERVICE_ACCOUNT_TOKEN: "op://Private/custom/token" },
+    });
+    const data = JSON.parse(result.content[0].text);
+
+    expect(data.exitCode).toBe(0);
+    expect(data.stdout).not.toContain("injected-custom-token");
+    expect(data.stdout).not.toContain("original-server-token");
+    expect(data.stdout).toBe("active=«REDACTED:OP_SERVICE_ACCOUNT_TOKEN»");
+  });
+
+  it("redacts secret value before truncation when output exceeds max buffer size", async () => {
+    mockBulkResolve({ "op://Private/secret/key": "supersecretkey999" });
+
+    // Secret straddles the 5 MiB boundary (bytes 5,242,870 to 5,242,887)
+    const paddingLength = 5 * 1024 * 1024 - 10;
+    const result = await handler()({
+      argv: [
+        node,
+        "-e",
+        `process.stdout.write('A'.repeat(${paddingLength}) + process.env.MY_SECRET + 'trailing')`,
+      ],
+      env: { MY_SECRET: "op://Private/secret/key" },
+    });
+    const data = JSON.parse(result.content[0].text);
+
+    expect(data.exitCode).toBe(0);
+    expect(data.stdoutTruncated).toBe(true);
+    expect(data.stdout).not.toContain("supersecretkey999");
+    expect(data.stdout).not.toContain("supersecre");
+    expect(data.stdout).toContain("«REDACTED");
+  });
 });
