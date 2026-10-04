@@ -270,6 +270,7 @@ Prefer `argv` over a shell `command` string when you can — fewer quoting surpr
 - **Token = master key** — Scope the service account tightly; rotate immediately if leaked; never commit tokens or MCP configs with secrets.
 - **Prefer references** — `op://…` + `op_run` beat pasting passwords into prompts or files.
 - **Least privilege** — Dedicated automation vaults beat sharing your whole account.
+- **Reporting vulnerabilities** — Open a public issue; see [SECURITY.md](SECURITY.md).
 
 ---
 
