@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- **Dev dependency updates** — Upgraded `vitest` to `^4.1.11`, which pulls in patched `@vitest/mocker`, `vite`, `postcss`, `nanoid`, and `picomatch` and drops `rollup`. Resolves all open Dependabot alerts. Dev-only; the published package is unchanged.
+
+### Changed
+
+- **CI matrix** — Test on Node 20, 22, and 24 (dropped Node 18, which `engines` already excludes).
 
 ## [4.0.2] - 2026-08-31
 
