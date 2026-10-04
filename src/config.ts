@@ -34,15 +34,17 @@ export interface ServerConfig {
   /** Where the token came from. */
   tokenSource: "args" | "env" | "keychain" | "missing";
   /**
-   * Vault names/IDs that `op_run`/`op_check_ref` may resolve `op://` references
-   * from. An empty list means no restriction (any accessible vault is allowed).
+   * Vault names/IDs (case-insensitive) the server may read from or write to.
+   * Enforced server-wide: by every tool and resource that touches a vault (see
+   * `vault-access.ts`) and, for `op://` references, by `secret-ref.ts`. An
+   * empty list means no restriction (any accessible vault is allowed).
    */
   allowedVaults: string[];
 }
 
 /**
  * Parse a comma-separated vault allow-list. An unset/blank value yields an
- * empty list, which the reference resolvers treat as "no restriction".
+ * empty list, which the vault guards treat as "no restriction".
  */
 export function parseAllowedVaults(raw: string | undefined): string[] {
   if (!raw || !raw.trim()) return [];
@@ -53,6 +55,14 @@ export function parseAllowedVaults(raw: string | undefined): string[] {
 }
 
 let _config: ServerConfig | undefined;
+
+/**
+ * macOS `security` CLI, invoked by absolute path rather than resolved through
+ * `PATH`: a binary planted earlier on `PATH` could otherwise hand the server an
+ * attacker-chosen service-account token and silently redirect secrets into the
+ * attacker's 1Password account.
+ */
+const MACOS_SECURITY_BINARY = "/usr/bin/security";
 
 interface MacOsKeychainLookupOptions {
   service?: string;
@@ -74,7 +84,7 @@ export function readMacOsKeychainToken({
   args.push("-s", service, "-w");
 
   try {
-    const token = execFileSyncImpl("security", args, {
+    const token = execFileSyncImpl(MACOS_SECURITY_BINARY, args, {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
@@ -116,6 +126,23 @@ export function resolveServiceAccountToken({
         : "missing";
 
   return { serviceAccountToken, tokenSource };
+}
+
+/**
+ * Startup warning for a weak token source, or `undefined` when none applies.
+ * Takes only the source (never the token) so the message cannot leak the secret.
+ */
+export function getTokenSourceWarning(
+  tokenSource: ServerConfig["tokenSource"],
+): string | undefined {
+  if (tokenSource !== "args") return undefined;
+  return (
+    "Service account token was passed on the command line " +
+    "(--service-account-token / --token). Command-line arguments are visible " +
+    "to other local processes (process listings, /proc/<pid>/cmdline), " +
+    "including commands run via op_run. Prefer the OP_SERVICE_ACCOUNT_TOKEN " +
+    "environment variable or, on macOS, the Keychain (OP_KEYCHAIN_SERVICE)."
+  );
 }
 
 /** Build and cache the server configuration. */

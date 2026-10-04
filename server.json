@@ -39,7 +39,7 @@
         },
         {
           "name": "OP_MCP_ALLOWED_VAULTS",
-          "description": "Optional comma-separated vault names or IDs that op_run and op_check_ref may resolve (empty = unrestricted)",
+          "description": "Optional comma-separated vault names or IDs (case-insensitive) the server may use. Enforced by every tool and resource that touches a vault (empty = unrestricted)",
           "isRequired": false,
           "isSecret": false,
           "format": "string"

@@ -5,11 +5,12 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { getClient } from "../client.js";
 import { log, logError } from "../logger.js";
 import { jsonResult, errorResult } from "../utils.js";
+import { filterAllowedVaults } from "../vault-access.js";
 import type { VaultSummary } from "../types.js";
 import { z } from "zod";
 
 export function registerVaultList(server: McpServer): void {
-  server.registerTool("vault_list", { description: "List all 1Password vaults accessible to the service account. Returns vault IDs, names, descriptions, and types.", inputSchema: z.object({}) }, async () => {
+  server.registerTool("vault_list", { description: "List the 1Password vaults accessible to the service account (limited to the allow-listed vaults when OP_MCP_ALLOWED_VAULTS / --allowed-vaults is configured). Returns vault IDs, names, descriptions, and types.", inputSchema: z.object({}) }, async () => {
               try {
                 log("debug", "Tool call: vault_list.");
                 const client = await getClient();
@@ -19,8 +20,9 @@ export function registerVaultList(server: McpServer): void {
                     "Your @1password/sdk version does not support listing vaults.",
                   );
                 }
-                const vaults = await listFn.call(client.vaults);
-                const summary: VaultSummary[] = (vaults ?? []).map(
+                const vaults: any[] = (await listFn.call(client.vaults)) ?? [];
+                const visibleVaults = filterAllowedVaults(vaults);
+                const summary: VaultSummary[] = visibleVaults.map(
                   (vault: any) => ({
                     id: vault.id,
                     name: vault.name ?? vault.title,

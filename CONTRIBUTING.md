@@ -40,7 +40,9 @@ src/
 ├── logger.ts             # Structured logging to stderr
 ├── config.ts             # CLI args, env vars, Keychain, allow-list
 ├── client.ts             # 1Password SDK client singleton
-├── secret-ref.ts         # op:// parsing and vault allow-list
+├── secret-ref.ts         # op:// parsing and reference checks
+├── vault-access.ts       # Server-wide vault allow-list enforcement
+├── redaction.ts          # op_run output redaction
 ├── utils.ts              # Result helpers, password generation
 ├── tools/                # MCP tool handlers (15)
 │   ├── index.ts
@@ -69,12 +71,15 @@ tests/
 ├── tools.test.ts
 ├── prompts.test.ts
 ├── secret-ref.test.ts
+├── vault-access.test.ts
+├── vault-allowlist.test.ts
+├── redaction.test.ts
 ├── op-run.test.ts
 ├── op-check-ref.test.ts
 └── resources.e2e.test.ts # Real MCP client ↔ server over an in-memory transport
 ```
 
-Version must stay aligned across `package.json`, `server.json`, and `SERVER_VERSION` in `src/config.ts`. See [AGENTS.md](AGENTS.md).
+Version must stay aligned across `package.json`, `package-lock.json`, `server.json`, and `SERVER_VERSION` in `src/config.ts`. See [agents.md](agents.md).
 
 ## Guidelines
 
@@ -82,6 +87,7 @@ Version must stay aligned across `package.json`, `server.json`, and `SERVER_VERS
 - **Errors** — Use `errorResult()` from `utils.ts` for tool failures; set protocol-friendly error responses.
 - **Logging** — Use `log()` / `logError()` from `logger.ts`. Never write to `stdout` (reserved for MCP).
 - **Secrets** — Default to metadata-only responses. New tools that can expose plaintext must opt in explicitly (e.g. `reveal` / `returnSecret`). Prefer documenting `op_run` for “use without reveal.”
+- **Vault allow-list** — Anything that reads or writes a vault must go through the helpers in `vault-access.ts` (`assertVaultIdAllowed`, `filterAllowedVaults`) so `OP_MCP_ALLOWED_VAULTS` applies server-wide.
 - **Schemas** — Tool/prompt inputs use Zod 4 and the MCP v2 registration APIs.
 - **Tests** — Add or update Vitest coverage for new tools, prompts, and utilities.
 - **Commits** — [Conventional Commits](https://www.conventionalcommits.org/) (e.g. `feat: add item_archive tool`, `docs: refresh README for MCP 2026-07-28`).
@@ -95,16 +101,16 @@ Version must stay aligned across `package.json`, `server.json`, and `SERVER_VERS
 
 ## Release process (maintainers)
 
-Automated publish runs from GitHub Releases via `publish.yml` (trusted publishing). Manual steps:
+Automated publish runs from GitHub Releases via `publish.yml` (trusted publishing). It has two jobs: `build` installs dependencies without running their install scripts, validates versions and the tag, builds, tests, and packs the tarball without any OIDC access, and a separate `publish` job, the only one with `id-token: write`, publishes that prebuilt tarball (`npm publish ./package.tgz --ignore-scripts`). Maintainer steps:
 
-1. Bump version in `package.json`, `server.json`, and `src/config.ts` (`SERVER_VERSION`).
+1. Bump version in `package.json`, `package-lock.json`, `server.json`, and `src/config.ts` (`SERVER_VERSION`).
 2. Update `CHANGELOG.md`.
 3. Merge to `master`, then create a GitHub Release tagged `vX.Y.Z` matching the package version.
 4. Confirm the publish workflow succeeds on npm.
 
 CI (`ci.yml`) builds and tests on push/PR to `master`. The published package requires **Node ≥ 20**.
 
-For agent-oriented publish checklists, see [AGENTS.md](AGENTS.md).
+For agent-oriented publish checklists, see [agents.md](agents.md).
 
 ## License
 

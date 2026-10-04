@@ -28,8 +28,8 @@ Built on the **MCP TypeScript SDK v2** with protocol negotiation for **[2026-07-
 
 ## Why teams pick this server
 
-- **Security-first defaults** — `password_read` and `item_get` return metadata unless you opt in with `reveal: true`.
-- **`op_run` (the MCP equivalent of `op run`)** — inject `op://vault/item/field` into a local command’s environment; plaintext is redacted from stdout/stderr and never logged back to the model.
+- **Security-first defaults** — `password_read` returns metadata, and `item_get` hides secret-bearing fields (passwords, SSH keys, OTP seeds, card numbers), unless you opt in with `reveal: true`.
+- **`op_run` (the MCP equivalent of `op run`)** — inject `op://vault/item/field` into a local command’s environment; resolved secrets are redacted from the returned stdout/stderr on a best-effort basis (including common encodings).
 - **Full vault toolkit** — list, search, get, edit, create logins & notes, rotate passwords, archive, or delete.
 - **Guided prompts** — password generation, credential rotation, vault audit, and secret-reference helpers.
 - **Browsable resources** — vault and item catalogs over `onepassword://…` URIs (no secrets in resource payloads).
@@ -47,7 +47,7 @@ Grouped the way agents and humans actually use them.
 
 | Tool | What it does |
 |------|----------------|
-| `vault_list` | List vaults the service account can access (id, name, description, type). |
+| `vault_list` | List vaults the service account can access (id, name, description, type), limited to the allow-list if one is set. |
 | `item_lookup` | Search a vault by title substring; optional `limit` (max 200). |
 | `item_list` | List every item in a vault (id, title, category, tags, `updatedAt`) — never secrets. |
 
@@ -55,7 +55,7 @@ Grouped the way agents and humans actually use them.
 
 | Tool | What it does |
 |------|----------------|
-| `item_get` | Full item: title, category, tags, notes, fields. Concealed values stay hidden unless `reveal: true`. Accepts `op://…` **or** `vaultId` + `itemId`. |
+| `item_get` | Full item: title, category, tags, notes, fields. Secret-bearing values (passwords and other concealed fields, SSH private keys, OTP seeds, card numbers) stay hidden unless `reveal: true`; only known non-secret field types are shown. **Notes are returned as-is.** Accepts `op://…` **or** `vaultId` + `itemId`. |
 | `password_read` | Read one field (default `password`) via `op://…` or ids. **Metadata-only unless `reveal: true`.** Prefer `op_run` to *use* a secret. |
 | `op_check_ref` | Validate `op://vault/item/field` and return non-secret metadata only (vault, item, field). Never the value. |
 
@@ -74,7 +74,7 @@ Grouped the way agents and humans actually use them.
 
 | Tool | What it does |
 |------|----------------|
-| `op_run` | Run a local command (`command` **or** `argv`) with env vars. Values matching `op://…` are resolved into the **child process only**; resolved secrets are redacted from returned output. Optional `cwd`, `shell`, `timeout_ms`, `stdin`. |
+| `op_run` | Run a local command (`command` **or** `argv`) with env vars. Values matching `op://…` are resolved into the **child process only**; resolved secrets are redacted from returned output (best effort — see Security & privacy). Output is capped at 5 MiB per stream, and a timeout kills the whole process tree. Optional `cwd`, `shell`, `timeout_ms`, `stdin`. |
 
 #### Soft-delete & destroy
 
@@ -97,7 +97,7 @@ Grouped the way agents and humans actually use them.
 | URI | Contents |
 |-----|----------|
 | `onepassword://config` | Non-secret server config (name, version, log level, token source, Node version). |
-| `onepassword://vaults` | JSON list of accessible vaults. |
+| `onepassword://vaults` | JSON list of accessible vaults (limited to the allow-list if one is set). |
 | `onepassword://vaults/{vaultId}/items` | URI template (listed by `resources/templates/list`): JSON item metadata for one vault (no secret values). |
 
 > **Upgrading from 4.x:** resource URIs used to start with `1password://`, which MCP clients could never read (a URI scheme can't start with a digit). Replace any hard-coded `1password://` URIs with `onepassword://`.
@@ -161,7 +161,7 @@ Store the token in Keychain, then point the server at it:
 }
 ```
 
-**Token resolution order:** CLI (`--service-account-token` / `--token`) → `OP_SERVICE_ACCOUNT_TOKEN` → macOS Keychain. `OP_KEYCHAIN_ACCOUNT` is optional when the service name alone is unique.
+**Token resolution order:** CLI (`--service-account-token` / `--token`) → `OP_SERVICE_ACCOUNT_TOKEN` → macOS Keychain. `OP_KEYCHAIN_ACCOUNT` is optional when the service name alone is unique. Avoid the CLI flags: command-line arguments are visible to other local processes, and the server logs a warning at startup if you use them.
 
 ### OpenAI Codex (TOML)
 
@@ -189,9 +189,9 @@ Set `OP_SERVICE_ACCOUNT_TOKEN` in your shell or CI. Note: `codex mcp add ... --e
 
 On macOS you can omit the token env and use `OP_KEYCHAIN_SERVICE` (+ optional `OP_KEYCHAIN_ACCOUNT`) instead.
 
-### Optional: lock `op_run` / `op_check_ref` to certain vaults
+### Optional: restrict the server to certain vaults
 
-By default those tools may resolve `op://` references from any vault the service account can see. To allow-list vaults:
+By default the server can use any vault the service account can see. To allow-list vaults:
 
 ```json
 {
@@ -202,7 +202,16 @@ By default those tools may resolve `op://` references from any vault the service
 }
 ```
 
-Names or IDs work. References outside the list are rejected before resolution. Same setting via `--allowed-vaults`.
+Names or IDs work (case-insensitive). Same setting via `--allowed-vaults`. The allow-list applies **server-wide**, to every tool and resource that touches a vault, not only `op_run` / `op_check_ref`:
+
+- `vault_list` and `onepassword://vaults` show only allowed vaults.
+- Tools that take a `vaultId`, and the `onepassword://vaults/{vaultId}/items` resource, must be given the vault’s ID (not its name); vaults outside the list are rejected.
+- `op://` references are checked both as written and by the vault they actually resolve to.
+- When an allow-list is set, each guarded call makes one extra `vaults.list` read (mind service-account rate limits), and the server fails closed if vaults can’t be listed.
+
+> **Upgrading from 4.0.3 or earlier?** If you set this expecting it to affect only `op_run` / `op_check_ref`, it now restricts everything.
+
+This is defense in depth: **scope the service account’s own vault access in 1Password first.**
 
 ---
 
@@ -242,7 +251,7 @@ Prefer `argv` over a shell `command` string when you can — fewer quoting surpr
 | `OP_SERVICE_ACCOUNT_TOKEN` | Usually yes | Service account token. Not required on macOS if Keychain vars are set. |
 | `OP_KEYCHAIN_SERVICE` | No | macOS: Keychain service name for the token. |
 | `OP_KEYCHAIN_ACCOUNT` | No | macOS: optional account to narrow the Keychain lookup. |
-| `OP_MCP_ALLOWED_VAULTS` | No | Comma-separated vault names/IDs allowed for `op_run` / `op_check_ref`. Empty = unrestricted. |
+| `OP_MCP_ALLOWED_VAULTS` | No | Comma-separated vault names/IDs (case-insensitive) the server may use, enforced server-wide. Empty = unrestricted. |
 | `OP_INTEGRATION_NAME` | No | Name reported to the 1Password SDK (default: `1password-mcp`). |
 | `OP_INTEGRATION_VERSION` | No | Version reported to the SDK (default: package version). |
 | `MCP_LOG_LEVEL` | No | `debug` \| `info` \| `warn` \| `error` (default: `info`). |
@@ -251,12 +260,12 @@ Prefer `argv` over a shell `command` string when you can — fewer quoting surpr
 ### CLI flags
 
 ```
---service-account-token <token>   1Password service account token
+--service-account-token <token>   1Password service account token (avoid: visible to other local processes)
 --token <token>                   Alias for --service-account-token
 --log-level <level>               error | warn | info | debug (default: info)
 --integration-name <name>         Custom integration name for the 1Password SDK
 --integration-version <version>   Custom integration version
---allowed-vaults <list>           Comma-separated allow-list for op_run / op_check_ref
+--allowed-vaults <list>           Comma-separated vault allow-list (names or IDs), applied server-wide
 ```
 
 ---
@@ -270,8 +279,12 @@ Prefer `argv` over a shell `command` string when you can — fewer quoting surpr
 - **Best fit** — Automation credentials: CI tokens, bot accounts, disposable env secrets.
 - **Avoid** — Banking, primary personal logins, recovery codes, or anything you cannot afford to expose to a model provider.
 - **Token = master key** — Scope the service account tightly; rotate immediately if leaked; never commit tokens or MCP configs with secrets.
+- **Prefer the env var or Keychain for the token** — `--token` / `--service-account-token` puts it in the process arguments, which other local processes can read (the server warns at startup). A same-user process can generally read the server’s environment too (for example `/proc/<pid>/environ` on Linux), so on macOS Keychain is the strongest option: it keeps the token out of config files and the process environment.
 - **Prefer references** — `op://…` + `op_run` beat pasting passwords into prompts or files.
-- **Least privilege** — Dedicated automation vaults beat sharing your whole account.
+- **`op_run` runs arbitrary commands as your user** — Keep your MCP client’s approval prompts on for it; don’t auto-approve it.
+- **Redaction is best effort** — `op_run` masks resolved secrets in returned output, including common encodings (base64, JSON- and URL-encoded forms, multi-line values). That protects against accidental disclosure. It is not a sandbox: a command can deliberately transform or transmit a secret it was given.
+- **Notes are not concealed** — `item_get` returns notes as-is (like `op item get`). Don’t keep secrets in the notes of vaults an agent can read.
+- **Least privilege** — Dedicated automation vaults beat sharing your whole account. `OP_MCP_ALLOWED_VAULTS` is a second fence, not a substitute.
 - **Reporting vulnerabilities** — Open a public issue; see [SECURITY.md](SECURITY.md).
 
 ---
@@ -311,7 +324,9 @@ src/
   config.ts                # CLI / env / Keychain / allow-list
   client.ts                # 1Password SDK client
   logger.ts                # Structured logs on stderr (stdout is protocol)
-  secret-ref.ts            # op:// parsing & allow-list checks
+  secret-ref.ts            # op:// parsing & reference checks
+  vault-access.ts          # Server-wide vault allow-list enforcement
+  redaction.ts             # op_run output redaction
   utils.ts                 # Result helpers, password generation
   tools/                   # All 15 MCP tools
   prompts/                 # Interactive workflow prompts
@@ -319,13 +334,13 @@ src/
 tests/
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Maintainers / agents: [AGENTS.md](AGENTS.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Maintainers / agents: [agents.md](agents.md).
 
 ---
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for version history, including the **5.0.0** resource URI change (`1password://` → `onepassword://`), the **4.0.0** MCP v2 / 2026-07-28 migration, and the **3.0.0** `op_run` / reveal-opt-in security changes.
+See [CHANGELOG.md](CHANGELOG.md) for version history, including the **5.0.0** resource URI change (`1password://` → `onepassword://`), the **4.0.4** security release (read its **Changed** notes before upgrading), the **4.0.0** MCP v2 / 2026-07-28 migration, and the **3.0.0** `op_run` / reveal-opt-in security changes.
 
 ---
 

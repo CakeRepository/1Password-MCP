@@ -2,7 +2,7 @@
  * Tests for MCP tool handlers with mocked 1Password client.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { McpServer } from "@modelcontextprotocol/server";
 
 // Mock the client module before importing tools
@@ -18,6 +18,7 @@ vi.mock("../src/logger.js", () => ({
   logError: vi.fn(),
 }));
 import { getClient } from "../src/client.js";
+import { resetConfig } from "../src/config.js";
 import { registerAllTools } from "../src/tools/index.js";
 
 const mockedGetClient = vi.mocked(getClient);
@@ -25,9 +26,13 @@ const mockedGetClient = vi.mocked(getClient);
 describe("MCP Tools", () => {
   let server: McpServer;
   let registeredTools: Map<string, any>;
+  const originalEnv = { ...process.env };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // These tests exercise unrestricted behavior; the allow-list has its own tests.
+    resetConfig();
+    delete process.env.OP_MCP_ALLOWED_VAULTS;
     server = new McpServer({ name: "test", version: "0.0.0" });
 
     // Spy on server.tool to capture registered handlers
@@ -44,6 +49,14 @@ describe("MCP Tools", () => {
     }) as any);
 
     registerAllTools(server);
+  });
+
+  afterEach(() => {
+    Object.keys(process.env).forEach((key) => {
+      if (!(key in originalEnv)) delete process.env[key];
+      else process.env[key] = originalEnv[key];
+    });
+    resetConfig();
   });
 
   it("registers all 15 tools", () => {
@@ -80,6 +93,17 @@ describe("MCP Tools", () => {
     expect(itemGet.schema.shape.secretReference.description).toContain(
       "op://vault/item/field",
     );
+  });
+
+  it("documents that item_get hides secret-bearing fields unless reveal is true", () => {
+    const itemGet = registeredTools.get("item_get")!;
+
+    for (const text of [itemGet.description, itemGet.schema.shape.reveal.description]) {
+      expect(text).toContain("SSH private keys");
+      expect(text).toContain("one-time-password seeds");
+      expect(text).toContain("card numbers");
+    }
+    expect(itemGet.description).toContain("hidden unless reveal is true");
   });
 
   it("documents note_create custom fields as id or title", () => {
@@ -210,56 +234,98 @@ describe("MCP Tools", () => {
   });
 
   describe("password_read", () => {
-    it("resolves a secret reference and returns the value when reveal is true", async () => {
-      mockedGetClient.mockResolvedValue({
-        secrets: {
-          resolve: vi.fn().mockResolvedValue("my-secret-value"),
+    const reference = "op://vault/item/password";
+
+    /** Mock a client whose resolveAll returns `secret` for `reference`. */
+    function mockResolvedReference(secret: string) {
+      const resolveAll = vi.fn().mockResolvedValue({
+        individualResponses: {
+          [reference]: { content: { secret, itemId: "i1", vaultId: "v1" } },
         },
-      } as any);
+      });
+      mockedGetClient.mockResolvedValue({ secrets: { resolveAll } } as any);
+      return resolveAll;
+    }
+
+    it("resolves a secret reference and returns the value when reveal is true", async () => {
+      const resolveAll = mockResolvedReference("my-secret-value");
 
       const handler = registeredTools.get("password_read")!.handler;
       const result = await handler({
-        secretReference: "op://vault/item/password",
+        secretReference: reference,
         reveal: true,
       });
       const data = JSON.parse(result.content[0].text);
 
-      expect(data.value).toBe("my-secret-value");
+      expect(data).toEqual({ value: "my-secret-value" });
+      expect(resolveAll).toHaveBeenCalledWith([reference]);
     });
 
     it("returns metadata only by default (reveal omitted)", async () => {
-      mockedGetClient.mockResolvedValue({
-        secrets: {
-          resolve: vi.fn().mockResolvedValue("my-secret-value"),
-        },
-      } as any);
+      mockResolvedReference("my-secret-value");
 
       const handler = registeredTools.get("password_read")!.handler;
       const result = await handler({
-        secretReference: "op://vault/item/password",
+        secretReference: reference,
       });
       const data = JSON.parse(result.content[0].text);
 
-      expect(data.resolved).toBe(true);
-      expect(data.value).toBeUndefined();
+      expect(data).toEqual({ resolved: true });
+      expect(result.content[0].text).not.toContain("my-secret-value");
     });
 
     it("returns metadata only when reveal is false", async () => {
-      mockedGetClient.mockResolvedValue({
-        secrets: {
-          resolve: vi.fn().mockResolvedValue("secret"),
-        },
-      } as any);
+      mockResolvedReference("hunter2-secret-value");
 
       const handler = registeredTools.get("password_read")!.handler;
       const result = await handler({
-        secretReference: "op://vault/item/password",
+        secretReference: reference,
         reveal: false,
       });
       const data = JSON.parse(result.content[0].text);
 
-      expect(data.resolved).toBe(true);
-      expect(data.value).toBeUndefined();
+      expect(data).toEqual({ resolved: true });
+      expect(result.content[0].text).not.toContain("hunter2-secret-value");
+    });
+
+    it("errors when the secret reference does not resolve", async () => {
+      mockedGetClient.mockResolvedValue({
+        secrets: {
+          resolveAll: vi.fn().mockResolvedValue({
+            individualResponses: { [reference]: { error: { type: "itemNotFound" } } },
+          }),
+        },
+      } as any);
+
+      const handler = registeredTools.get("password_read")!.handler;
+      const result = await handler({ secretReference: reference, reveal: true });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain(
+        `Could not resolve secret reference '${reference}' (itemNotFound)`,
+      );
+    });
+
+    it("errors when the SDK cannot resolve secret references", async () => {
+      mockedGetClient.mockResolvedValue({ secrets: {} } as any);
+
+      const handler = registeredTools.get("password_read")!.handler;
+      const result = await handler({ secretReference: reference });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("does not support resolving secrets");
+    });
+
+    it("errors on a malformed secret reference without calling the SDK", async () => {
+      const resolveAll = vi.fn();
+      mockedGetClient.mockResolvedValue({ secrets: { resolveAll } } as any);
+
+      const handler = registeredTools.get("password_read")!.handler;
+      const result = await handler({ secretReference: "not-a-reference" });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Invalid secret reference");
+      expect(resolveAll).not.toHaveBeenCalled();
     });
 
     it("errors when neither secretReference nor vaultId/itemId provided", async () => {
@@ -270,6 +336,62 @@ describe("MCP Tools", () => {
 
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("Provide secretReference or both vaultId and itemId");
+    });
+
+    describe("by vault ID + item ID", () => {
+      function mockItem() {
+        const get = vi.fn().mockResolvedValue({
+          id: "i1",
+          title: "GitHub",
+          fields: [
+            { id: "username", title: "username", fieldType: "Text", value: "octocat" },
+            { id: "password", title: "password", fieldType: "Concealed", value: "s3cr3t" },
+          ],
+        });
+        mockedGetClient.mockResolvedValue({ items: { get } } as any);
+        return get;
+      }
+
+      it("returns field metadata only by default", async () => {
+        const get = mockItem();
+
+        const handler = registeredTools.get("password_read")!.handler;
+        const result = await handler({ vaultId: "v1", itemId: "i1" });
+        const data = JSON.parse(result.content[0].text);
+
+        expect(get).toHaveBeenCalledWith("v1", "i1");
+        expect(data).toEqual({
+          id: "i1",
+          title: "GitHub",
+          field: "password",
+          fieldType: "Concealed",
+        });
+        expect(result.content[0].text).not.toContain("s3cr3t");
+      });
+
+      it("returns the requested field value when reveal is true", async () => {
+        mockItem();
+
+        const handler = registeredTools.get("password_read")!.handler;
+        const result = await handler({
+          vaultId: "v1",
+          itemId: "i1",
+          field: "Username",
+          reveal: true,
+        });
+
+        expect(JSON.parse(result.content[0].text)).toEqual({ value: "octocat" });
+      });
+
+      it("errors when the field is not on the item", async () => {
+        mockItem();
+
+        const handler = registeredTools.get("password_read")!.handler;
+        const result = await handler({ vaultId: "v1", itemId: "i1", field: "nope" });
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain("Field 'nope' not found on item");
+      });
     });
   });
 
@@ -323,6 +445,165 @@ describe("MCP Tools", () => {
 
       const password = data.fields.find((f: any) => f.id === "password");
       expect(password.value).toBe("s3cr3t");
+    });
+
+    describe("field types", () => {
+      /** Secret-bearing field types: hidden by default, including unknown/future ones. */
+      const secretBearing = [
+        { fieldType: "Concealed", value: "hunter2-password" },
+        {
+          fieldType: "SshKey",
+          value:
+            "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\n-----END OPENSSH PRIVATE KEY-----",
+        },
+        {
+          fieldType: "Totp",
+          value: "otpauth://totp/GitHub:octocat?secret=JBSWY3DPEHPK3PXP&issuer=GitHub",
+        },
+        { fieldType: "CreditCardNumber", value: "4111111111111111" },
+        { fieldType: "Unsupported", value: "opaque-unsupported-payload" },
+        { fieldType: "SomeFutureSecretType", value: "future-type-secret" },
+      ];
+
+      /** Known non-secret field types: shown by default. */
+      const nonSecret = [
+        { fieldType: "Text", value: "octocat" },
+        { fieldType: "Url", value: "https://github.com/login" },
+        { fieldType: "Email", value: "octocat@example.com" },
+        { fieldType: "Phone", value: "+1 555 0100" },
+        { fieldType: "Date", value: "2024-01-31" },
+        { fieldType: "MonthYear", value: "2027-04" },
+        { fieldType: "Menu", value: "Visa" },
+        { fieldType: "CreditCardType", value: "visa" },
+        { fieldType: "Address", value: "1 Main St, Springfield" },
+        { fieldType: "Reference", value: "ref-to-another-item" },
+      ];
+
+      function itemWith(fields: Array<{ fieldType: string; value: string }>) {
+        return {
+          ...sampleItem,
+          fields: fields.map((field, index) => ({
+            id: `f${index}`,
+            title: `field-${field.fieldType}`,
+            ...field,
+          })),
+        };
+      }
+
+      async function getItem(item: unknown, reveal?: boolean) {
+        mockedGetClient.mockResolvedValue({
+          items: { get: vi.fn().mockResolvedValue(item) },
+        } as any);
+        const handler = registeredTools.get("item_get")!.handler;
+        const result = await handler({ vaultId: "v1", itemId: "i1", reveal });
+        return { result, data: JSON.parse(result.content[0].text) };
+      }
+
+      /** The form a string takes inside the JSON response text (newlines etc. escaped). */
+      const asJsonText = (value: string) => JSON.stringify(value).slice(1, -1);
+
+      it.each(secretBearing)(
+        "conceals $fieldType values by default",
+        async ({ fieldType, value }) => {
+          const { result, data } = await getItem(itemWith([{ fieldType, value }]));
+
+          expect(data.fields[0].type).toBe(fieldType);
+          expect(data.fields[0].value).toBe("[concealed]");
+          expect(result.content[0].text).not.toContain(asJsonText(value));
+        },
+      );
+
+      it.each(secretBearing)(
+        "conceals $fieldType values when reveal is false",
+        async ({ fieldType, value }) => {
+          const { result, data } = await getItem(itemWith([{ fieldType, value }]), false);
+
+          expect(data.fields[0].value).toBe("[concealed]");
+          expect(result.content[0].text).not.toContain(asJsonText(value));
+        },
+      );
+
+      it.each(secretBearing)(
+        "reveals $fieldType values when reveal is true",
+        async ({ fieldType, value }) => {
+          const { data } = await getItem(itemWith([{ fieldType, value }]), true);
+
+          expect(data.fields[0].value).toBe(value);
+        },
+      );
+
+      it.each(nonSecret)(
+        "shows $fieldType values by default",
+        async ({ fieldType, value }) => {
+          const { data } = await getItem(itemWith([{ fieldType, value }]));
+
+          expect(data.fields[0].value).toBe(value);
+        },
+      );
+
+      it("treats a field with no type as secret-bearing", async () => {
+        const item = {
+          ...sampleItem,
+          fields: [{ id: "mystery", title: "mystery", value: "typeless-secret" }],
+        };
+        const { result, data } = await getItem(item);
+
+        expect(data.fields[0].value).toBe("[concealed]");
+        expect(result.content[0].text).not.toContain("typeless-secret");
+      });
+
+      it("conceals only the secret-bearing fields of a mixed item", async () => {
+        const { data } = await getItem(
+          itemWith([
+            { fieldType: "Text", value: "octocat" },
+            { fieldType: "Totp", value: "otpauth://totp/x?secret=ABC" },
+            { fieldType: "Url", value: "https://example.com" },
+            { fieldType: "SshKey", value: "private-key-material" },
+          ]),
+        );
+
+        expect(data.fields.map((f: any) => f.value)).toEqual([
+          "octocat",
+          "[concealed]",
+          "https://example.com",
+          "[concealed]",
+        ]);
+      });
+
+      it("never returns field details, even with reveal: true", async () => {
+        const item = {
+          ...sampleItem,
+          fields: [
+            {
+              id: "otp",
+              title: "one-time password",
+              fieldType: "Totp",
+              value: "otpauth://totp/x?secret=ABC",
+              details: { type: "Otp", content: { code: "987654" } },
+            },
+            {
+              id: "key",
+              title: "private key",
+              fieldType: "SshKey",
+              value: "private-key-material",
+              details: {
+                type: "SshKey",
+                content: { publicKey: "ssh-ed25519 AAAA", fingerprint: "SHA256:fp", keyType: "Ed25519" },
+              },
+            },
+          ],
+        };
+
+        for (const reveal of [false, true]) {
+          const { result, data } = await getItem(item, reveal);
+
+          for (const field of data.fields) {
+            expect(field.details).toBeUndefined();
+          }
+          expect(result.content[0].text).not.toContain("987654");
+          expect(result.content[0].text).not.toContain("SHA256:fp");
+        }
+      });
     });
 
     it("resolves vault/item from a secret reference", async () => {

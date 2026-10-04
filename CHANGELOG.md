@@ -23,6 +23,30 @@ Major release because the resource URIs changed (see **Breaking** below). Tools,
 
 - **End-to-end resource tests** — A real MCP client reads the resources from `serveStdio(() => buildServer())` over an in-memory transport, in both the 2025 (`initialize`) and 2026-07-28 protocol eras, so an advertised URI that the SDK cannot parse or route fails CI. Adds the `@modelcontextprotocol/client` dev dependency (tests only).
 
+## [4.0.4] - 2026-10-04
+
+### Security
+
+- **`item_get` no longer returns secrets held in non-`Concealed` fields** — Only `Concealed` fields were masked, so SSH private keys, one-time-password (TOTP) seeds, and card numbers came back in plaintext without `reveal: true`. Masking is now deny-by-default: only known non-secret field types (text, URL, email, phone, date, month/year, menu, card type, address, reference) are shown, and every other type, including any added by future SDK versions, needs `reveal: true`. Notes are still returned as-is, matching `op item get`; don't keep secrets in the notes of vaults an agent can read.
+- **Vault allow-list is now enforced server-wide** — `OP_MCP_ALLOWED_VAULTS` / `--allowed-vaults` only covered `op_run` and `op_check_ref`, and only compared the vault segment as written in an `op://` reference. It now applies to every tool and resource that touches a vault: `vault_list` and `1password://vaults` are filtered, and vault IDs are checked before anything is returned or modified. `op://` references are checked both as written and by the vault they actually resolve to. It fails closed if vaults can't be listed.
+- **`op_run` redaction no longer leaks the remainder of overlapping secrets** — Redaction now masks every occurrence of every secret in a single pass over the original output, so overlapping or nested secrets can't leak: a username that is a prefix of a credential string is no longer replaced first, leaving the password visible. It also masks common encodings of each secret: base64 (including inside a larger base64 payload such as an HTTP Basic auth header), JSON-escaped and URL-encoded forms, and multi-line secrets line by line and with CRLF line endings.
+- **`op_run` output cap no longer exhausts memory** — The 5 MiB per-stream cap is now applied while the command runs. Excess output is discarded instead of buffered, which fixes a memory-exhaustion crash, and a secret cut off at the cap never survives as a partial prefix.
+- **`op_run` timeouts kill the whole process tree** — On timeout the process group (POSIX) or process tree via `taskkill /T` (Windows) is killed, and `op_run` always returns shortly afterwards, even if a background process holds the output pipes. Previously it could hang forever and leave processes running with injected secrets.
+- **Case-insensitive credential scrub in `op_run`** — The server's own credential variables (`OP_SERVICE_ACCOUNT_TOKEN`, `OP_KEYCHAIN_SERVICE`, `OP_KEYCHAIN_ACCOUNT`) are now stripped from the child environment regardless of letter case.
+- **Removed a leftover CI workflow and hardened publishing** — The one-time `mcp-v2-migration.yml` is deleted: any GitHub user could trigger it with a PR comment, and it ran `npm install` with a write-scoped token. `publish.yml` no longer interpolates the release tag into shell, checkouts no longer persist credentials, and publishing is split into two jobs: build, test, and pack run without OIDC access (and without dependency install scripts), and a separate job that alone has `id-token: write` publishes the prebuilt tarball with `--ignore-scripts`.
+- **macOS Keychain lookup uses an absolute path** — The token lookup runs `/usr/bin/security` instead of resolving `security` through `PATH`, so a binary planted earlier on `PATH` can't hand the server an attacker-chosen service account token.
+- **Warning when the token is passed on the command line** — `--service-account-token` / `--token` put the token in the process arguments, which other local processes (including commands run through `op_run`) can read. The server now logs a startup warning; prefer `OP_SERVICE_ACCOUNT_TOKEN` or, on macOS, the Keychain.
+- All of the above came out of an internal security review.
+
+### Changed
+
+- **Behavior change: the vault allow-list is server-wide** — If you set `OP_MCP_ALLOWED_VAULTS` / `--allowed-vaults` expecting it to affect only `op_run` and `op_check_ref`, it now restricts every tool and resource. Tools that take a `vaultId` need the vault's ID, not its name. With an allow-list set, each guarded call makes one extra `vaults.list` read (mind service account rate limits). It is defense in depth; scope the service account's own vault access in 1Password first.
+- **`item_get` hides more by default** — SSH private keys, OTP seeds, and card numbers now show `[concealed]` unless you pass `reveal: true`.
+- **Stricter `op://` validation** — Malformed references passed to `item_get` and `password_read` are now rejected locally with a clear error.
+- **More candid `op_run` description** — The tool description no longer claims plaintext is "NEVER" returned. Redaction is best effort and protects against accidental disclosure; it is not a sandbox, because a command can deliberately transform or transmit a secret it was given.
+- **Publishing** — `prepublishOnly` now only matters for manual `npm publish`; the automated workflow publishes a prebuilt tarball.
+- **Documentation** — README, CONTRIBUTING, and agents.md cover the server-wide allow-list, best-effort redaction, unconcealed notes, and the two-job publish workflow.
+
 ## [4.0.3] - 2026-10-04
 
 ### Security

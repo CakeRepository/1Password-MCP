@@ -155,4 +155,86 @@ describe("op_check_ref", () => {
     expect(result.content[0].text).toContain("not in the allowed vault list");
     expect(resolveAll).not.toHaveBeenCalled();
   });
+
+  describe("resolved-vault check", () => {
+    const vaults = [
+      { id: "vlt-private-0001", title: "Private" },
+      { id: "vlt-prod-0002", title: "Prod" },
+    ];
+
+    function setAllowList(value: string) {
+      process.env.OP_MCP_ALLOWED_VAULTS = value;
+      resetConfig();
+    }
+
+    /** A client whose `reference` resolves to a secret living in `resolvedVaultId`. */
+    function mockClient(reference: string, resolvedVaultId: string) {
+      const client = {
+        vaults: { list: vi.fn().mockResolvedValue(vaults) },
+        secrets: {
+          resolveAll: vi.fn().mockResolvedValue({
+            individualResponses: {
+              [reference]: {
+                content: { secret: "s3cr3t", itemId: "i1", vaultId: resolvedVaultId },
+              },
+            },
+          }),
+        },
+        items: {
+          get: vi.fn().mockResolvedValue({
+            id: "i1",
+            title: "GitHub",
+            category: "Login",
+            fields: [{ id: "token", title: "token", fieldType: "Concealed", value: "s3cr3t-value" }],
+          }),
+        },
+      };
+      mockedGetClient.mockResolvedValue(client as any);
+      return client;
+    }
+
+    it("rejects a reference that names an allowed vault but resolves to a vault outside the allowed set", async () => {
+      setAllowList("Private");
+      const reference = "op://Private/github/token";
+      const client = mockClient(reference, "vlt-prod-0002");
+
+      const result = await handler()({ secretReference: reference });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("not in the allowed vault list");
+      expect(result.content[0].text).toContain("vlt-prod-0002");
+      expect(client.secrets.resolveAll).toHaveBeenCalledTimes(1);
+      expect(client.items.get).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["by name", "Private", "op://Private/github/token"],
+      ["by ID", "vlt-private-0001", "op://vlt-private-0001/github/token"],
+      ["by ID, in a different case", "VLT-PRIVATE-0001", "op://vlt-private-0001/github/token"],
+    ])(
+      "allows a reference that resolves to an allow-listed vault (%s)",
+      async (_label, allowList, reference) => {
+        setAllowList(allowList);
+        const client = mockClient(reference, "vlt-private-0001");
+
+        const result = await handler()({ secretReference: reference });
+        const data = JSON.parse(result.content[0].text);
+
+        expect(result.isError).toBeUndefined();
+        expect(data.resolved).toBe(true);
+        expect(client.items.get).toHaveBeenCalledWith("vlt-private-0001", "i1");
+        expect(result.content[0].text).not.toContain("s3cr3t");
+      },
+    );
+
+    it("does not list vaults when no allow-list is configured", async () => {
+      const reference = "op://Private/github/token";
+      const client = mockClient(reference, "vlt-prod-0002");
+
+      const result = await handler()({ secretReference: reference });
+
+      expect(result.isError).toBeUndefined();
+      expect(client.vaults.list).not.toHaveBeenCalled();
+    });
+  });
 });

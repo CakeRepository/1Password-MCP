@@ -13,6 +13,7 @@ import {
 import { getClient } from "../client.js";
 import { getConfig, SERVER_NAME, SERVER_VERSION } from "../config.js";
 import { log, logError } from "../logger.js";
+import { assertVaultIdAllowed, filterAllowedVaults } from "../vault-access.js";
 
 /**
  * Read the `vaultId` template variable. The SDK hands over the matched URI
@@ -76,7 +77,7 @@ export function registerAllResources(server: McpServer): void {
     "onepassword://vaults",
     {
       description:
-        "List of all 1Password vaults accessible to the service account.",
+        "List of the 1Password vaults accessible to the service account (limited to the allow-listed vaults when OP_MCP_ALLOWED_VAULTS / --allowed-vaults is configured).",
       mimeType: "application/json",
     },
     async (uri) => {
@@ -87,8 +88,9 @@ export function registerAllResources(server: McpServer): void {
         if (!listFn) {
           throw new Error("Cannot list vaults with this SDK version.");
         }
-        const vaults = await listFn.call(client.vaults);
-        const summary = (vaults ?? []).map((vault: any) => ({
+        const vaults: any[] = (await listFn.call(client.vaults)) ?? [];
+        const visibleVaults = filterAllowedVaults(vaults);
+        const summary = visibleVaults.map((vault: any) => ({
           id: vault.id,
           name: vault.name ?? vault.title,
           description: vault.description,
@@ -141,6 +143,7 @@ export function registerAllResources(server: McpServer): void {
 
         log("debug", "Resource: vault-items.", { vaultId });
         const client = await getClient();
+        await assertVaultIdAllowed(client, vaultId);
         const listFn =
           client?.items?.list ?? (client?.items as any)?.listAll;
         if (!listFn) {
