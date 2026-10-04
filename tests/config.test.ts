@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   getConfig,
+  getTokenSourceWarning,
   readMacOsKeychainToken,
   resetConfig,
   resolveServiceAccountToken,
@@ -123,7 +124,8 @@ describe("config", () => {
     });
 
     expect(token).toBe("keychain-token");
-    expect(execFileSyncImpl).toHaveBeenCalledWith("security", [
+    // Absolute path: the binary must never be resolved through PATH.
+    expect(execFileSyncImpl).toHaveBeenCalledWith("/usr/bin/security", [
       "find-generic-password",
       "-a",
       "alice",
@@ -182,6 +184,32 @@ describe("config", () => {
     expect(config.tokenSource).toBe("env");
     expect(config.serviceAccountToken).toBe("env-token");
     expect(readKeychainToken).not.toHaveBeenCalled();
+  });
+
+  it("warns when the token was passed on the command line", () => {
+    const warning = getTokenSourceWarning("args");
+
+    expect(warning).toBeDefined();
+    expect(warning).toContain("--service-account-token");
+    expect(warning).toContain("OP_SERVICE_ACCOUNT_TOKEN");
+    expect(warning).toContain("OP_KEYCHAIN_SERVICE");
+  });
+
+  it.each(["env", "keychain", "missing"] as const)(
+    "does not warn when the token source is %s",
+    (tokenSource) => {
+      expect(getTokenSourceWarning(tokenSource)).toBeUndefined();
+    },
+  );
+
+  it("never includes the token value in the token source warning", () => {
+    const token = "ops_super-secret-token";
+    process.argv = ["node", "index.js", "--service-account-token", token];
+
+    const warning = getTokenSourceWarning(getConfig().tokenSource);
+
+    expect(warning).toBeDefined();
+    expect(warning).not.toContain(token);
   });
 
   it("uses default integration name/version", () => {

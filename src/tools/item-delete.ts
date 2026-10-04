@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getClient } from "../client.js";
 import { log, logError } from "../logger.js";
 import { jsonResult, errorResult } from "../utils.js";
+import { assertVaultIdAllowed } from "../vault-access.js";
 
 export function registerItemDelete(server: McpServer): void {
   server.registerTool("item_delete", { description: "Permanently delete an item from a 1Password vault. This action cannot be undone.", inputSchema: z.object({
@@ -15,6 +16,7 @@ export function registerItemDelete(server: McpServer): void {
               try {
                 log("debug", "Tool call: item_delete.", { vaultId, itemId });
                 const client = await getClient();
+                await assertVaultIdAllowed(client, vaultId);
                 if (!(client?.items as any)?.delete) {
                   throw new Error(
                     "Your @1password/sdk version does not support deleting items.",

@@ -6,6 +6,8 @@ import { z } from "zod";
 import { getClient } from "../client.js";
 import { log, logError } from "../logger.js";
 import { jsonResult, errorResult } from "../utils.js";
+import { parseSecretRef, assertVaultAllowed } from "../secret-ref.js";
+import { assertVaultIdAllowed } from "../vault-access.js";
 
 export function registerPasswordRead(server: McpServer): void {
   server.registerTool("password_read", { description: "Retrieve a secret from 1Password using either a secret reference (op://vault/item/field) or vault ID + item ID. Supports field selection and optional value reveal (defaults to metadata-only). Revealing a secret puts it in the model context/transcript — to USE a secret in a command or API call, prefer op_run with op:// references instead.", inputSchema: z.object({
@@ -42,20 +44,34 @@ export function registerPasswordRead(server: McpServer): void {
                   field,
                   reveal,
                 });
+                if (secretReference) {
+                  // Pre-check the vault segment as written; the vault the
+                  // reference actually resolves to is verified below.
+                  assertVaultAllowed(parseSecretRef(secretReference).vault);
+                }
+
                 const client = await getClient();
                 const shouldReveal = reveal === true;
 
                 if (secretReference) {
-                  if (!client?.secrets?.resolve) {
+                  if (!client?.secrets?.resolveAll) {
                     throw new Error(
                       "Your @1password/sdk version does not support resolving secrets.",
                     );
                   }
-                  const value = await client.secrets.resolve(secretReference);
+                  const resolved = await client.secrets.resolveAll([secretReference]);
+                  const response = resolved.individualResponses[secretReference];
+                  if (!response?.content) {
+                    const reason = response?.error?.type ?? "unknown";
+                    throw new Error(
+                      `Could not resolve secret reference '${secretReference}' (${reason}).`,
+                    );
+                  }
+                  await assertVaultIdAllowed(client, response.content.vaultId);
                   if (!shouldReveal) {
                     return jsonResult({ resolved: true });
                   }
-                  return jsonResult({ value });
+                  return jsonResult({ value: response.content.secret });
                 }
 
                 if (!vaultId || !itemId) {
@@ -63,6 +79,8 @@ export function registerPasswordRead(server: McpServer): void {
                     "Provide secretReference or both vaultId and itemId.",
                   );
                 }
+
+                await assertVaultIdAllowed(client, vaultId);
 
                 if (!client?.items?.get) {
                   throw new Error(

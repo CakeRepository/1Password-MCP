@@ -15,11 +15,12 @@ Follow [Semantic Versioning](https://semver.org/).
 Update the version in **all** of:
 
 1. `package.json`
-2. `server.json`
-3. `src/config.ts` (`SERVER_VERSION`)
-4. `CHANGELOG.md`
+2. `package-lock.json` (root `version` and `packages[""].version`)
+3. `server.json` (top-level `version` and `packages[0].version`)
+4. `src/config.ts` (`SERVER_VERSION`)
+5. `CHANGELOG.md`
 
-The publish workflow fails if those three version strings disagree, or if a GitHub Release tag is not `v` + package version.
+The publish workflow fails if the `package.json`, `server.json`, and `src/config.ts` versions disagree (it does not check the lockfile or changelog), or if a GitHub Release tag is not `v` + package version.
 
 ## Build and validation
 
@@ -41,7 +42,7 @@ Runtime requirement: **Node.js ≥ 20**.
 
 1. Merge version + changelog to `master`.
 2. Create a GitHub Release on `master` with tag `vX.Y.Z`.
-3. `publish.yml` builds, validates versions, and publishes (trusted publishing / `NPM_TOKEN` as configured).
+3. `publish.yml` runs two jobs (see CI/CD): `build` installs, validates versions and the tag, builds, tests, and packs the tarball with no OIDC access; `publish` then publishes that tarball via npm trusted publishing (OIDC, no `NPM_TOKEN`).
 
 ### Manual
 
@@ -50,7 +51,7 @@ npm login
 npm publish --access public
 ```
 
-`prepublishOnly` runs `clean`, `build`, and `test` before upload.
+`prepublishOnly` runs `clean`, `build`, and `test` before a manual `npm publish`. The automated workflow publishes a prebuilt tarball (`npm publish ./package.tgz --ignore-scripts`), which skips lifecycle scripts, so its `build` job runs build and test instead.
 
 ## Configuration variables
 
@@ -59,13 +60,13 @@ npm publish --access public
 | `OP_SERVICE_ACCOUNT_TOKEN` | Primary auth. Required unless macOS Keychain fallback is used. |
 | `OP_KEYCHAIN_SERVICE` | macOS only: Keychain service name for the token. |
 | `OP_KEYCHAIN_ACCOUNT` | macOS only: optional account for Keychain lookup. |
-| `OP_MCP_ALLOWED_VAULTS` | Optional comma-separated vault names/IDs for `op_run` / `op_check_ref`. |
+| `OP_MCP_ALLOWED_VAULTS` | Optional comma-separated vault names/IDs (case-insensitive). Enforced server-wide by every tool and resource that touches a vault; tools that take a `vaultId` need an ID. |
 | `OP_INTEGRATION_NAME` | Optional; default `1password-mcp`. |
 | `OP_INTEGRATION_VERSION` | Optional; default `SERVER_VERSION`. |
 | `MCP_LOG_LEVEL` | Optional: `debug`, `info`, `warn`, `error` (default `info`). |
 | `MCP_DEBUG` | Optional; if set, forces debug logging. |
 
-CLI equivalents: `--service-account-token` / `--token`, `--log-level`, `--integration-name`, `--integration-version`, `--allowed-vaults`.
+CLI equivalents: `--service-account-token` / `--token`, `--log-level`, `--integration-name`, `--integration-version`, `--allowed-vaults`. Avoid the token flags: argv is visible to other local processes, and the server logs a warning at startup.
 
 ## Public surface (keep docs in sync)
 
@@ -81,10 +82,17 @@ When tools, prompts, or resources change, update **README.md** (npm’s face), *
 - Prefer `op_run` + `op://` over `reveal: true`.
 - Prefer `op_check_ref` over revealing just to validate a path.
 - Default create/update responses should not echo secrets (`returnSecret` / `reveal` opt-in).
+- The vault allow-list is server-wide: any new tool or resource that touches a vault must go through `src/vault-access.ts` (`assertVaultIdAllowed` / `filterAllowedVaults`).
+- `op_run` redaction is best effort, not a sandbox: don't run untrusted commands with injected secrets.
+- `item_get` returns notes as-is, so don't store secrets in notes.
 - Never commit tokens or MCP configs containing secrets.
 
 ## CI/CD
 
 - `ci.yml` — build/test on push and PRs to `master`.
-- `publish.yml` — npm publish on GitHub Release / manual dispatch.
+- `publish.yml` — npm publish on GitHub Release / manual dispatch, as two jobs:
+  - `build` (`contents: read`, no OIDC): `npm ci --ignore-scripts` (no dependency install scripts), version and tag validation, build, test, then `npm pack --ignore-scripts` into `package.tgz`, uploaded as the `npm-package` artifact.
+  - `publish` (`needs: build`): the only job with `id-token: write`. It never checks out the repo or installs dependencies; it downloads the tarball and runs `npm publish ./package.tgz --access public --ignore-scripts` (skipped if that version is already on npm).
+  - Keep it that way: dependency code must never run in a job that holds `id-token: write`. npm's trusted-publisher config is bound to the file name `publish.yml`, so don't rename it.
+- Workflow hygiene: pass `${{ ... }}` values to scripts through `env:` instead of interpolating them into `run:`, check out with `persist-credentials: false`, and don't add `issue_comment`-triggered or write-scoped one-off runner workflows (the leftover `mcp-v2-migration.yml` was removed in 4.0.4 for that reason).
 - Registry package name: `io.github.CakeRepository/1password` (`mcpName` / `server.json`).

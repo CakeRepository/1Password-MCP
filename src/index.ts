@@ -8,7 +8,12 @@
 
 import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
-import { SERVER_NAME, SERVER_VERSION, getConfig } from "./config.js";
+import {
+  SERVER_NAME,
+  SERVER_VERSION,
+  getConfig,
+  getTokenSourceWarning,
+} from "./config.js";
 import { log, logError } from "./logger.js";
 import { registerAllTools } from "./tools/index.js";
 import { registerAllPrompts } from "./prompts/index.js";
@@ -46,6 +51,9 @@ async function main(): Promise<void> {
     node: process.version,
     tokenSource: config.tokenSource,
   });
+
+  const tokenWarning = getTokenSourceWarning(config.tokenSource);
+  if (tokenWarning) log("warn", tokenWarning);
 
   log("info", "Starting MCP stdio protocol negotiation.");
   await serveStdio(() => buildServer());
