@@ -21,7 +21,7 @@ Major release because the resource URIs changed (see **Breaking** below). Tools,
 
 ### Added
 
-- **End-to-end resource tests** — A real MCP client reads the resources from `serveStdio(() => buildServer())` over an in-memory transport, in both the 2025 (`initialize`) and 2026-07-28 protocol eras, so an advertised URI that the SDK cannot parse or route fails CI. Adds the `@modelcontextprotocol/client` dev dependency (tests only).
+- **End-to-end resource tests** — A real MCP client reads the resources from `serveStdio(() => buildServer())` over an in-memory transport, in both the 2025 (`initialize`) and 2026-07-28 protocol eras, so an advertised URI that the SDK cannot parse or route fails CI. They also cover the vault allow-list through `resources/read`, including that a percent-encoded vault ID can't bypass it. Adds the `@modelcontextprotocol/client` dev dependency (tests only).
 
 ## [4.0.4] - 2026-10-04
 

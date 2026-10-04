@@ -198,4 +198,35 @@ describe.each(ERAS)("MCP resources end-to-end ($era protocol era)", ({ era, opti
     ).rejects.toMatchObject({ code: ProtocolErrorCode.InvalidParams });
     expect(mockedGetClient).not.toHaveBeenCalled();
   });
+
+  describe("with OP_MCP_ALLOWED_VAULTS", () => {
+    beforeEach(() => {
+      process.env.OP_MCP_ALLOWED_VAULTS = "Prod";
+      resetConfig();
+    });
+
+    it("lists only the allow-listed vaults", async () => {
+      const data = await readJson("onepassword://vaults");
+
+      expect(data.vaults.map((v: { id: string }) => v.id)).toEqual([PROD.id]);
+    });
+
+    it("refuses items of a vault outside the allow-list without listing them", async () => {
+      const data = await readJson(`onepassword://vaults/${CI.id}/items`);
+
+      expect(data.error).toContain("not in the allowed vault list");
+      expect(opClient.items.list).not.toHaveBeenCalled();
+    });
+
+    it("checks the decoded vaultId, so percent-encoding cannot bypass the allow-list", async () => {
+      const encode = (id: string) => [...id].map((c) => `%${c.charCodeAt(0).toString(16)}`).join("");
+
+      const refused = await readJson(`onepassword://vaults/${encode(CI.id)}/items`);
+      const allowed = await readJson(`onepassword://vaults/${encode(PROD.id)}/items`);
+
+      expect(refused.error).toContain("not in the allowed vault list");
+      expect(allowed.vaultId).toBe(PROD.id);
+      expect(opClient.items.list).toHaveBeenCalledExactlyOnceWith(PROD.id);
+    });
+  });
 });
