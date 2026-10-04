@@ -340,7 +340,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Maintainers / agents: [agents.md](agents
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for version history, including the **5.0.0** resource URI change (`1password://` → `onepassword://`), the **4.0.4** security release (read its **Changed** notes before upgrading), the **4.0.0** MCP v2 / 2026-07-28 migration, and the **3.0.0** `op_run` / reveal-opt-in security changes.
+See [CHANGELOG.md](CHANGELOG.md) for version history, including the **5.0.0** release (resource URIs moved from `1password://` to `onepassword://`, plus security hardening; read its **Changed** notes before upgrading), the **4.0.0** MCP v2 / 2026-07-28 migration, and the **3.0.0** `op_run` / reveal-opt-in security changes.
 
 ---
 
