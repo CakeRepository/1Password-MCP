@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getClient } from "../client.js";
 import { log, logError } from "../logger.js";
 import { jsonResult, errorResult } from "../utils.js";
+import { assertVaultIdAllowed } from "../vault-access.js";
 import type { ItemSummary } from "../types.js";
 
 export function registerItemLookup(server: McpServer): void {
@@ -30,6 +31,7 @@ export function registerItemLookup(server: McpServer): void {
                   limit,
                 });
                 const client = await getClient();
+                await assertVaultIdAllowed(client, vaultId);
                 const listFn =
                   client?.items?.list ?? (client?.items as any)?.listAll;
                 if (!listFn) {

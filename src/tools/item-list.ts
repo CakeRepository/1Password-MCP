@@ -7,6 +7,7 @@ import type { ItemOverview } from "@1password/sdk";
 import { getClient } from "../client.js";
 import { log, logError } from "../logger.js";
 import { jsonResult, errorResult } from "../utils.js";
+import { assertVaultIdAllowed } from "../vault-access.js";
 
 export function registerItemList(server: McpServer): void {
   server.registerTool("item_list", { description: "List all items in a 1Password vault, returning id, title, category, tags, and updatedAt for each. Never returns secret values.", inputSchema: z.object({
@@ -15,6 +16,7 @@ export function registerItemList(server: McpServer): void {
               try {
                 log("debug", "Tool call: item_list.", { vaultId });
                 const client = await getClient();
+                await assertVaultIdAllowed(client, vaultId);
                 if (!client?.items?.list) {
                   throw new Error(
                     "Your @1password/sdk version does not support listing items.",

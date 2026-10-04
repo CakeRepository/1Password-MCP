@@ -1,6 +1,10 @@
 /**
  * Shared helpers for parsing and validating `op://vault/item/field` secret
- * references, used by `op_run` and `op_check_ref`.
+ * references, used by `op_run`, `op_check_ref`, `item_get`, and `password_read`.
+ *
+ * `assertVaultAllowed` is only a textual pre-check on the vault segment as
+ * written in a reference. The vault a reference actually resolves to is checked
+ * by ID with the helpers in `vault-access.ts`.
  */
 
 import { getConfig } from "./config.js";

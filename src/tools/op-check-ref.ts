@@ -10,6 +10,7 @@ import { getClient } from "../client.js";
 import { log, logError } from "../logger.js";
 import { jsonResult, errorResult } from "../utils.js";
 import { parseSecretRef, assertVaultAllowed } from "../secret-ref.js";
+import { assertVaultIdAllowed } from "../vault-access.js";
 
 export function registerOpCheckRef(server: McpServer): void {
   server.registerTool("op_check_ref", { description: "Validate an op://vault/item/field secret reference and return only non-secret metadata (vault name, item title, field label, field type) confirming it resolves — the field VALUE is never returned. Use this to check a reference is correct before using it with op_run; do not use password_read/item_get with reveal just to check a reference exists.", inputSchema: z.object({
@@ -41,6 +42,9 @@ export function registerOpCheckRef(server: McpServer): void {
                 }
 
                 const { vaultId, itemId } = response.content;
+                // The vault segment passed the textual pre-check above; also
+                // verify the vault the reference actually resolved to.
+                await assertVaultIdAllowed(client, vaultId);
                 const item: any = await client.items.get(vaultId, itemId);
 
                 const desiredField = ref.field.toLowerCase();

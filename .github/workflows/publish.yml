@@ -7,34 +7,36 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
-  publish:
+  # Runs dependency code (npm ci, build, tests) with a read-only token and no
+  # OIDC access, then hands the packed tarball to the publish job.
+  build:
+    name: Build, test, and pack
     runs-on: ubuntu-latest
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+    outputs:
+      package_name: ${{ steps.pack.outputs.package_name }}
+      package_version: ${{ steps.pack.outputs.package_version }}
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Use Node.js 24
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
-      - name: Verify trusted-publishing toolchain
-        run: |
-          node --version
-          npm --version
-          node -e "const [major, minor] = process.versions.node.split('.').map(Number); if (major < 22 || (major === 22 && minor < 14)) process.exit(1)"
-          npm install --global npm@latest
-          npm --version
-          node -e "const { execSync } = require('child_process'); const version = execSync('npm --version', { encoding: 'utf8' }).trim().split('.').map(Number); if (version[0] < 11 || (version[0] === 11 && version[1] < 5) || (version[0] === 11 && version[1] === 5 && version[2] < 1)) process.exit(1)"
-
+      # Dependency install scripts never run in the job that builds the
+      # published tarball; build and tests do not need them.
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Validate version alignment
         run: |
@@ -53,9 +55,10 @@ jobs:
 
       - name: Validate release tag matches package version
         if: github.event_name == 'release'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          RELEASE_TAG="${{ github.event.release.tag_name }}"
           EXPECTED_TAG="v${PACKAGE_VERSION}"
 
           echo "release tag: ${RELEASE_TAG}"
@@ -66,12 +69,81 @@ jobs:
             exit 1
           fi
 
-      - name: Check if version already exists on npm
-        id: npm_check
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Pack npm tarball
+        id: pack
         run: |
           PACKAGE_NAME=$(node -p "require('./package.json').name")
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
 
+          # Pack into a fresh directory so the new tarball is the only .tgz
+          # there, whatever npm names it, then give it a fixed name.
+          PACK_DIR=$(mktemp -d)
+          npm pack --ignore-scripts --pack-destination "${PACK_DIR}"
+
+          set -- "${PACK_DIR}"/*.tgz
+          if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
+            echo "Expected exactly one tarball from npm pack."
+            exit 1
+          fi
+          mv "$1" package.tgz
+          echo "Packed ${PACKAGE_NAME}@${PACKAGE_VERSION} as package.tgz"
+
+          echo "package_name=${PACKAGE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "package_version=${PACKAGE_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload npm package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: npm-package
+          path: package.tgz
+          if-no-files-found: error
+          retention-days: 1
+
+  # The only job with OIDC access (npm trusted publishing). It never checks out
+  # the repository or installs/runs dependency code; it only publishes the
+  # tarball built above.
+  publish:
+    name: Publish to npm
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Use Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Verify trusted-publishing toolchain
+        run: |
+          node --version
+          npm --version
+          node -e "const [major, minor] = process.versions.node.split('.').map(Number); if (major < 22 || (major === 22 && minor < 14)) process.exit(1)"
+          npm install --global npm@latest
+          npm --version
+          node -e "const { execSync } = require('child_process'); const version = execSync('npm --version', { encoding: 'utf8' }).trim().split('.').map(Number); if (version[0] < 11 || (version[0] === 11 && version[1] < 5) || (version[0] === 11 && version[1] === 5 && version[2] < 1)) process.exit(1)"
+
+      - name: Download npm package artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: npm-package
+
+      - name: Check if version already exists on npm
+        id: npm_check
+        env:
+          PACKAGE_NAME: ${{ needs.build.outputs.package_name }}
+          PACKAGE_VERSION: ${{ needs.build.outputs.package_version }}
+        run: |
           if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
             echo "already_published=true" >> "$GITHUB_OUTPUT"
             echo "Version ${PACKAGE_VERSION} is already published. Skipping publish."
@@ -80,12 +152,6 @@ jobs:
             echo "Version ${PACKAGE_VERSION} is not published yet."
           fi
 
-      - name: Build
-        run: npm run build
-
-      - name: Test
-        run: npm test
-
       - name: Publish to npm with OIDC
         if: steps.npm_check.outputs.already_published == 'false'
-        run: npm publish --access public
+        run: npm publish ./package.tgz --access public --ignore-scripts
