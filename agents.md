@@ -73,7 +73,7 @@ When tools, prompts, or resources change, update **README.md** (npm’s face), *
 
 - **15 tools:** `vault_list`, `item_lookup`, `item_list`, `item_get`, `item_edit`, `item_delete`, `item_archive`, `note_create`, `password_create`, `password_read`, `password_update`, `password_generate`, `password_generate_memorable`, `op_run`, `op_check_ref`
 - **4 prompts:** `generate-secure-password`, `credential-rotation`, `vault-audit`, `secret-reference-helper`
-- **3 resources:** `1password://config`, `1password://vaults`, `1password://vaults/{vaultId}/items`
+- **3 resources:** `onepassword://config`, `onepassword://vaults`, and the `ResourceTemplate` `onepassword://vaults/{vaultId}/items`. The SDK parses every read URI with `new URL()`, so a scheme must start with a letter (never `1password://`), and parameterized URIs must be registered as a `ResourceTemplate`. `tests/resources.e2e.test.ts` reads every advertised resource through a real client to catch both mistakes.
 - **Protocol:** MCP SDK v2, stdio negotiation for **2026-07-28** + legacy clients
 
 ## Agent security conventions

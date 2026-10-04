@@ -35,6 +35,7 @@ You do not need a live service account token for unit tests. For manual MCP smok
 ```
 src/
 ├── index.ts              # Server entrypoint (stdio + MCP negotiation)
+├── server.ts             # buildServer(): registers tools, prompts, resources
 ├── types.ts              # Shared types
 ├── logger.ts             # Structured logging to stderr
 ├── config.ts             # CLI args, env vars, Keychain, allow-list
@@ -69,7 +70,8 @@ tests/
 ├── prompts.test.ts
 ├── secret-ref.test.ts
 ├── op-run.test.ts
-└── op-check-ref.test.ts
+├── op-check-ref.test.ts
+└── resources.e2e.test.ts # Real MCP client ↔ server over an in-memory transport
 ```
 
 Version must stay aligned across `package.json`, `server.json`, and `SERVER_VERSION` in `src/config.ts`. See [AGENTS.md](AGENTS.md).

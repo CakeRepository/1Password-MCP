@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.0] - 2026-10-04
+
+Major release because the resource URIs changed (see **Breaking** below). Tools, prompts, configuration, and the Node.js requirement are unchanged.
+
+### Changed
+
+- **Breaking: resource URIs use the `onepassword://` scheme** — `1password://config` → `onepassword://config`, `1password://vaults` → `onepassword://vaults`, and `1password://vaults/{vaultId}/items` → `onepassword://vaults/{vaultId}/items`. Replace any hard-coded `1password://` URIs. The old URIs could never be read (see **Fixed**), so this only affects code or configuration that hard-codes them. They were still published identifiers with no possible alias, because the SDK rejects them before the server sees the request; hence the major version.
+- `buildServer()` moved to `src/server.ts` (still re-exported from the entrypoint), so tests can build the real server without starting stdio.
+
+### Fixed
+
+- **Resources are now readable by MCP clients** — Every `resources/read` failed with `-32602 Resource URI … is invalid`. The SDK parses the URI with WHATWG `new URL()` before dispatching, and a URI scheme must start with a letter (RFC 3986 §3.1), so no `1password://` URI ever reached the server's handlers.
+- **Per-vault items is a real resource template** — `onepassword://vaults/{vaultId}/items` is registered as a `ResourceTemplate` (listed by `resources/templates/list`) and reads `vaultId` from the template variables, percent-decoded. It used to be a static resource whose URI was the literal template string, so no concrete vault URI could ever match it.
+
+### Added
+
+- **End-to-end resource tests** — A real MCP client reads the resources from `serveStdio(() => buildServer())` over an in-memory transport, in both the 2025 (`initialize`) and 2026-07-28 protocol eras, so an advertised URI that the SDK cannot parse or route fails CI. Adds the `@modelcontextprotocol/client` dev dependency (tests only).
+
 ## [4.0.3] - 2026-10-04
 
 ### Security

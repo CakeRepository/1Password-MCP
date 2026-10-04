@@ -6,26 +6,12 @@
  * 2025-era connection.
  */
 
-import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { SERVER_NAME, SERVER_VERSION, getConfig } from "./config.js";
 import { log, logError } from "./logger.js";
-import { registerAllTools } from "./tools/index.js";
-import { registerAllPrompts } from "./prompts/index.js";
-import { registerAllResources } from "./resources/index.js";
+import { buildServer } from "./server.js";
 
-export function buildServer(): McpServer {
-  const server = new McpServer({
-    name: SERVER_NAME,
-    version: SERVER_VERSION,
-  });
-
-  registerAllTools(server);
-  registerAllPrompts(server);
-  registerAllResources(server);
-
-  return server;
-}
+export { buildServer };
 
 process.on("uncaughtException", (error) => {
   logError("Uncaught exception.", error);

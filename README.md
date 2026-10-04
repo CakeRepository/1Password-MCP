@@ -32,7 +32,7 @@ Built on the **MCP TypeScript SDK v2** with protocol negotiation for **[2026-07-
 - **`op_run` (the MCP equivalent of `op run`)** — inject `op://vault/item/field` into a local command’s environment; plaintext is redacted from stdout/stderr and never logged back to the model.
 - **Full vault toolkit** — list, search, get, edit, create logins & notes, rotate passwords, archive, or delete.
 - **Guided prompts** — password generation, credential rotation, vault audit, and secret-reference helpers.
-- **Browsable resources** — vault and item catalogs over `1password://…` URIs (no secrets in resource payloads).
+- **Browsable resources** — vault and item catalogs over `onepassword://…` URIs (no secrets in resource payloads).
 - **Modern MCP** — stdio transport, Zod 4 schemas, MCP 2026-07-28 negotiation with legacy client compatibility.
 
 ---
@@ -96,9 +96,11 @@ Grouped the way agents and humans actually use them.
 
 | URI | Contents |
 |-----|----------|
-| `1password://config` | Non-secret server config (name, version, log level, token source, Node version). |
-| `1password://vaults` | JSON list of accessible vaults. |
-| `1password://vaults/{vaultId}/items` | JSON item metadata for one vault (no secret values). |
+| `onepassword://config` | Non-secret server config (name, version, log level, token source, Node version). |
+| `onepassword://vaults` | JSON list of accessible vaults. |
+| `onepassword://vaults/{vaultId}/items` | URI template (listed by `resources/templates/list`): JSON item metadata for one vault (no secret values). |
+
+> **Upgrading from 4.x:** resource URIs used to start with `1password://`, which MCP clients could never read (a URI scheme can't start with a digit). Replace any hard-coded `1password://` URIs with `onepassword://`.
 
 ---
 
@@ -305,6 +307,7 @@ Watch mode: `npm run dev`.
 ```
 src/
   index.ts                 # Entrypoint — MCP stdio + protocol negotiation
+  server.ts                # buildServer() — registers tools, prompts, resources
   config.ts                # CLI / env / Keychain / allow-list
   client.ts                # 1Password SDK client
   logger.ts                # Structured logs on stderr (stdout is protocol)
@@ -312,7 +315,7 @@ src/
   utils.ts                 # Result helpers, password generation
   tools/                   # All 15 MCP tools
   prompts/                 # Interactive workflow prompts
-  resources/               # 1password:// resources
+  resources/               # onepassword:// resources
 tests/
 ```
 
@@ -322,7 +325,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Maintainers / agents: [AGENTS.md](AGENTS
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for version history, including the **4.0.0** MCP v2 / 2026-07-28 migration and the **3.0.0** `op_run` / reveal-opt-in security changes.
+See [CHANGELOG.md](CHANGELOG.md) for version history, including the **5.0.0** resource URI change (`1password://` → `onepassword://`), the **4.0.0** MCP v2 / 2026-07-28 migration, and the **3.0.0** `op_run` / reveal-opt-in security changes.
 
 ---
 
