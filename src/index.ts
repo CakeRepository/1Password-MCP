@@ -18,13 +18,56 @@ import { buildServer } from "./server.js";
 
 export { buildServer };
 
+// Once set, the process is on its way out: no further handler may re-enter
+// the shutdown path (or the logging path that feeds the spin described below).
+let shuttingDown = false;
+
+/**
+ * Best-effort final error report. Logging itself can throw here — e.g. when
+ * stderr is a broken pipe after the parent went away — so every write is
+ * guarded. An unreportable error is still fatal; it is just a quiet one.
+ */
+function reportFatal(context: string, error: unknown): void {
+  try {
+    logError(context, error);
+  } catch {
+    try {
+      process.stderr.write(`[fatal] ${context}\n`);
+    } catch {
+      /* stderr is gone; nothing left to report through. */
+    }
+  }
+}
+
+function shutdown(exitCode: number): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  process.exit(exitCode);
+}
+
+// A fatal error in a stdio server is unrecoverable: the connection state is
+// unknown and the client cannot be answered reliably. Log once and exit so a
+// supervisor can restart cleanly. NOTE: never just log-and-continue here —
+// when stdio is broken (orphaned process, EPIPE on every write), each
+// logging attempt throws again and the process spins at 100% CPU forever.
 process.on("uncaughtException", (error) => {
-  logError("Uncaught exception.", error);
+  reportFatal("Uncaught exception.", error);
+  shutdown(1);
 });
 
 process.on("unhandledRejection", (reason) => {
-  logError("Unhandled rejection.", reason);
+  reportFatal("Unhandled rejection.", reason);
+  shutdown(1);
 });
+
+// Nobody left on the other end of stdin: this server is an orphan. Exit
+// instead of idling (or spinning) forever.
+process.stdin.on("end", () => shutdown(0));
+process.stdin.on("close", () => shutdown(0));
+
+// Supervisor-initiated shutdown is a clean shutdown, not an error.
+process.on("SIGTERM", () => shutdown(0));
+process.on("SIGINT", () => shutdown(0));
 
 async function main(): Promise<void> {
   const config = getConfig();
