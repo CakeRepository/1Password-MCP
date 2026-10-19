@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.0] - 2026-10-19
+
+### Fixed
+
+- **Orphaned or crashed servers exit instead of spinning at 100% CPU** — The `uncaughtException` / `unhandledRejection` handlers logged the error and kept running. Once stdio broke (the parent exited, and every write failed with EPIPE), each log attempt threw again, so the process looped forever at full CPU. Short-lived clients that spawn MCP servers and exit leaked one such process per run. Fatal errors are now logged once through a guarded reporter, then the process exits with code 1 (#35, #36). Thanks to @S0ya13 for the report and fix.
+
+### Changed
+
+- **Behavior change: stdio lifecycle** — The server exits with code 0 when stdin ends or closes, and on `SIGTERM` / `SIGINT`. Per the MCP stdio shutdown sequence, closing stdin means the client is shutting down. Requests still in flight at that point are not answered, so a script that pipes requests in and closes stdin straight away may miss replies to slow calls such as `op_run`. An unhandled promise rejection now ends the process with exit code 1, the Node.js default, instead of being logged and ignored.
+
+### Added
+
+- **Stdio lifecycle tests** — `tests/stdio-lifecycle.test.ts` spawns the built server and checks that it exits on stdin EOF and exits non-zero after a fatal error.
+
+### Dependencies
+
+- Dev dependency `@modelcontextprotocol/client` updated from 2.0.0 to 2.2.0 (tests only, #34).
+
 ## [5.0.0] - 2026-10-04
 
 Major release: the resource URIs changed (see **Breaking** below), and it includes security hardening from an internal review. Read **Changed** before upgrading: the vault allow-list now applies server-wide, and `item_get` hides more field types by default. Tool names and input parameters, prompts, and the Node.js requirement are unchanged.
