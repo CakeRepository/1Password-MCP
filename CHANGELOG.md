@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.1] - 2026-11-05
+
+### Dependencies
+
+- Raise the minimum runtime dependencies to `@modelcontextprotocol/server` `^2.3.0` and `zod` `^4.6.7`. These minimum versions are now enforced for npm consumers, rather than recorded only in the repository lockfile.
+- Include the dependency refresh from #38 and #39: MCP client 2.4.0, Vitest and `@vitest/mocker` 4.1.12, and Vite 8.3.5 in the development lockfile.
+
+### Changed
+
+- Synchronize package, lockfile, MCP registry, and runtime version metadata at 5.1.1. Tool schemas, resource URIs, and the Node.js runtime requirement are unchanged.
+
 ## [5.1.0] - 2026-10-19
 
 ### Fixed
